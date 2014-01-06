@@ -1,17 +1,18 @@
 
 package main
 import (
-  "net"
-  "log"
-  "os"
-  "syscall"
+	"net"
+	"log"
+	"os"
+	"syscall"
 	"runtime/debug"
 	ftunnel "bitbucket.org/Tomasen/fast-table-tunnel/src"
-  gozd "bitbucket.org/PinIdea/zero-downtime-daemon"
+	gozd "bitbucket.org/PinIdea/zero-downtime-daemon"
 )
 
 const (
-	_server = "localhost:53128"
+	_accept  = ":63028"
+	_connect = "localhost:53128"
 )
 
 const (
@@ -19,46 +20,46 @@ const (
 )
 
 func handleServer(client, server net.Conn) {
-  defer func() {
-    if r := recover(); r != nil {
-      log.Println("Recovered in", r, ":")
-      log.Println(string(debug.Stack()))
-    }
-  }()
+	defer func() {
+		if r := recover(); r != nil {
+			log.Println("Recovered in", r, ":")
+			log.Println(string(debug.Stack()))
+		}
+	}()
 	
 	defer client.Close()
 	defer server.Close()
 	
 	buff := make([]byte, BUFFER_MAXSIZE)
 	
-  for {
-    n, err := server.Read(buff)
-    if err != nil {
+	for {
+		n, err := server.Read(buff)
+		if err != nil {
 			log.Panicln(err)
-      return
-    }
+			return
+		}
     
 		ftunnel.Encrypt(buff[:n])
 		
 		_, err = client.Write(buff[:n])
-    if err != nil {
+		if err != nil {
 			log.Panicln(err)
-      return
-    }
-  }
+			return
+		}
+	}
 }
 	
 func serveTCP(client net.Conn) {
-  defer func() {
-    if r := recover(); r != nil {
-      log.Println("Recovered in", r, ":")
-      log.Println(string(debug.Stack()))
-    }
-  }()
+	defer func() {
+		if r := recover(); r != nil {
+			log.Println("Recovered in", r, ":")
+			log.Println(string(debug.Stack()))
+		}
+	}()
 
-  defer client.Close() 
+	defer client.Close() 
   
-	server, err := net.Dial("tcp", _server)
+	server, err := net.Dial("tcp", _connect)
 	if err != nil {
 		// handle error
 		log.Panicln(err)
@@ -70,77 +71,77 @@ func serveTCP(client net.Conn) {
 	
 	buff := make([]byte, BUFFER_MAXSIZE)
 	
-  for {
-    n, err := client.Read(buff)
-    if err != nil {
+	for {
+		n, err := client.Read(buff)
+		if err != nil {
 			log.Panicln(err)
-      return
-    }
+			return
+		}
     
 		ftunnel.Decrypt(buff[:n])
 		_, err = server.Write(buff[:n])
-    if err != nil {
+		if err != nil {
 			log.Panicln(err)
-      return
-    }
-  }
+			return
+		}
+	}
 }
 
 func handleListners(cl chan net.Listener) {
   
-  for v := range cl {
+	for v := range cl {
 		go func(l net.Listener){
-      for {
-        conn, err := l.Accept()
-        if err != nil {
-          // gozd.ErrorAlreadyStopped may occur when shutdown/reload
-          log.Println("accept error: ", err)
-          break
-        }
+			for {
+				conn, err := l.Accept()
+				if err != nil {
+					// gozd.ErrorAlreadyStopped may occur when shutdown/reload
+					log.Println("accept error: ", err)
+					break
+				}
  
-        go serveTCP(conn)
-      }
-    }(v)
-  }
+				go serveTCP(conn)
+			}
+		}(v)
+	}
 }
 
 func main() {
 	
-  log.Println(os.TempDir())
-  ctx  := gozd.Context{
-    Hash:   "fast-tunnel",
-    Command:"start",
-    Maxfds: syscall.Rlimit{Cur:32677, Max:32677},
-    User:   "www",
-    Group:  "www",
-    Logfile:"tunnel_daemon.log",
-    Directives:map[string]gozd.Server{
-      "client":gozd.Server{
-        Network:"tcp",
-        Address:":61080",
-      },
-    },
-  }
+	log.Println(os.TempDir())
+	ctx  := gozd.Context{
+		Hash:   "fast-tunnel",
+		Command:"start",
+		Maxfds: syscall.Rlimit{Cur:32677, Max:32677},
+		User:   "www",
+		Group:  "www",
+		Logfile:"tunnel_daemon.log",
+		Directives:map[string]gozd.Server{
+			"client":gozd.Server{
+				Network:"tcp",
+				Address:_accept,
+			},
+		},
+	}
   
-  cl := make(chan net.Listener,1)
-  go handleListners(cl)
-  sig, err := gozd.Daemonize(ctx, cl) // returns channel that connects with daemon
-  if err != nil {
-    log.Println("error: ", err)
-    return
-  }
+	cl := make(chan net.Listener,1)
+	go handleListners(cl)
+	sig, err := gozd.Daemonize(ctx, cl) // returns channel that connects with daemon
+	if err != nil {
+		log.Println("error: ", err)
+		return
+	}
   
-  // other initializations or config setting
-  for s := range sig  {
-    switch s {
-    case syscall.SIGHUP, syscall.SIGUSR2:
-      // do some custom jobs while reload/hotupdate
+	// other initializations or config setting
+	for s := range sig  {
+		switch s {
+		case syscall.SIGHUP, syscall.SIGUSR2:
+			// do some custom jobs while reload/hotupdate
       
     
-    case syscall.SIGTERM:
-      // do some clean up and exit
-      return
-    }
-  }
+		case syscall.SIGTERM:
+			// do some clean up and exit
+			return
+		}
+	}
 }
 
