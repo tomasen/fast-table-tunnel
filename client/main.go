@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	_accept  = ":61080"
+	_accept  = ":63028"
 	_connect = "cdn.hk0.shooter.cn:61080"
 )
 
@@ -35,7 +35,7 @@ func handleServer(client, server net.Conn) {
 	for {
 		n, err := server.Read(buff)
 		if err != nil {
-			log.Panicln(err)
+			log.Println(err)
 			return
 		}
     
@@ -43,7 +43,7 @@ func handleServer(client, server net.Conn) {
 		
 		_, err = client.Write(buff[:n])
 		if err != nil {
-			log.Panicln(err)
+			log.Println(err)
 			return
 		}
 	}
@@ -74,14 +74,14 @@ func serveTCP(client net.Conn) {
 	for {
 		n, err := client.Read(buff)
 		if err != nil {
-			log.Panicln(err)
+			log.Println(err)
 			return
 		}
     
 		ftunnel.Encrypt(buff[:n])
 		_, err = server.Write(buff[:n])
 		if err != nil {
-			log.Panicln(err)
+			log.Println(err)
 			return
 		}
 	}
