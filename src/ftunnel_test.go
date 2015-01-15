@@ -30,45 +30,46 @@ var (
 
 //server
 func serverRun() {
-	udp_listener, err := net.ListenUDP("udp", s_udp_addr)
+	udp_listener, err := net.ListenUDP("udp4", s_udp_addr)
 	if err != nil {
 		log.Fatal("serverRun:Listen:", err)
 	}
-	buff := make([]byte, BUFFER_MAXSIZE)
-	//connMap := make(map[string]*Connect)
+
+	connMap := make(map[string]*Connect)
 	for {
+		buff := make([]byte, BUFFER_MAXSIZE)
 		n, u_addr, err := udp_listener.ReadFromUDP(buff)
 		if err != nil {
 			log.Fatal("serverRun:ReadFromUDP:", err)
 		}
-		//u_addr_str := u_addr.String()
-		//if c, exist := connMap[u_addr_str]; exist {
-		//	c.Recv(buff[:n])
-		//} else {
-		t_conn, err := net.Dial("tcp", s_tcp_addr)
-		if err != nil {
-			log.Fatal("serverRun:Dial tcp:", err)
-		}
+		u_addr_str := u_addr.String()
+		if c, exist := connMap[u_addr_str]; exist {
+			c.Recv(buff[:n])
+		} else {
+			t_conn, err := net.Dial("tcp4", s_tcp_addr)
+			if err != nil {
+				log.Fatal("serverRun:Dial tcp:", err)
+			}
 
-		u_conn, err := net.DialUDP("udp", nil, u_addr)
-		if err != nil {
-			log.Fatal("serverRun:Dial udp:", err)
-		}
+			_, err = udp_listener.WriteToUDP([]byte{}, u_addr)
+			if err != nil {
+				log.Fatal("main:NewConnect:Write test:", err)
+			}
 
-		conn, err := NewConnect(t_conn, u_conn)
-		if err != nil {
-			log.Fatal("serverRun:NewConnect:", err)
+			conn, err := NewConnect(t_conn, udp_listener, u_addr)
+			if err != nil {
+				log.Fatal("serverRun:NewConnect:", err)
+			}
+			connMap[u_addr_str] = conn
+			go conn.Serve()
+			go conn.Recv(buff[:n])
 		}
-		//connMap[u_addr_str] = conn
-		go conn.Serve()
-		conn.Recv(buff[:n])
-		//}
 	}
 }
 
 //client
 func clientRun() {
-	ln, err := net.Listen("tcp", c_tcp_addr)
+	ln, err := net.Listen("tcp4", c_tcp_addr)
 	if err != nil {
 		log.Fatal("clientRun:Listen:", err)
 	}
@@ -78,36 +79,33 @@ func clientRun() {
 			log.Fatal("clientRun:Accept:", err)
 		}
 
-		u_conn, err := net.DialUDP("udp", nil, s_udp_addr)
-		if err != nil {
-			log.Fatal("clientRun:DialUDP:", err)
-		}
-		conn, err := NewConnect(t_conn, u_conn)
-		if err != nil {
-			log.Fatal("clientRun:NewConnect:", err)
-		}
-		_, err = u_conn.Write([]byte{})
-		if err != nil {
-			log.Fatal("clientRun:NewConnect:Write test:", err)
-		}
-
-		u_addr, err := net.ResolveUDPAddr("udp", u_conn.LocalAddr().String())
+		laddr, err := net.ResolveUDPAddr("udp4", "0.0.0.0:0")
 		if err != nil {
 			log.Fatal("clientRun:ResolveUDPAddr:", err)
 		}
-		udp_conn, err := net.ListenUDP("udp", u_addr)
+
+		u_conn, err := net.ListenUDP("udp4", laddr)
 		if err != nil {
 			log.Fatal("clientRun:ListenUDP:", err)
 		}
 
-		go conn.ListenUDP(udp_conn)
-		go conn.Serve()
+		_, err = u_conn.WriteToUDP([]byte{}, s_udp_addr)
+		if err != nil {
+			log.Fatal("clientRun:Write test:", err)
+		}
+
+		conn, err := NewConnect(t_conn, u_conn, s_udp_addr)
+		if err != nil {
+			log.Fatal("clientRun:NewConnect:", err)
+		}
+
+		go conn.ListenAndServe()
 	}
 }
 
 //request
 func requestRun() {
-	conn, err := net.DialTimeout("tcp", c_tcp_addr, 1e9)
+	conn, err := net.DialTimeout("tcp4", c_tcp_addr, 1e9)
 	if err != nil {
 		log.Fatal("requestRun:Dial:", err)
 	}
@@ -135,8 +133,9 @@ func requestRun() {
 
 //handle s_tcp_addr, like squid
 func handleConn(conn net.Conn) {
-	buff := make([]byte, BUFFER_MAXSIZE)
+
 	for {
+		buff := make([]byte, BUFFER_MAXSIZE)
 		n, err := conn.Read(buff)
 		if err != nil {
 			log.Fatal("Test:Read:", err)
@@ -161,7 +160,7 @@ func handleConn(conn net.Conn) {
 //main test
 func Test(t *testing.T) {
 	var err error
-	s_udp_addr, err = net.ResolveUDPAddr("udp", s_udp_addr_str)
+	s_udp_addr, err = net.ResolveUDPAddr("udp4", s_udp_addr_str)
 	if err != nil {
 		t.Fatal("Test:ResolveUDPAddr:", err)
 	}
@@ -177,7 +176,7 @@ func Test(t *testing.T) {
 
 	go func() {
 		//listen s_tcp_addr
-		ln, err := net.Listen("tcp", s_tcp_addr)
+		ln, err := net.Listen("tcp4", s_tcp_addr)
 		if err != nil {
 			t.Fatal("Test:Listen:", err)
 		}

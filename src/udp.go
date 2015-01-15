@@ -3,20 +3,18 @@ package ftunnel
 import (
 	"errors"
 	"log"
-	"net"
-	"time"
+	"sync"
 )
 
 var (
-	SplitSize  = 1024
-	Timeout    = 10       //seconds signal wait
-	CheckPoint = uint8(1) //check and request retry when the remaining pkg numbers less than this number
+	SplitSize = 1024
 )
 
 const (
-	SIGNAL_SEND  = uint8(0)
-	SIGNAL_DONE  = uint8(1)
-	SIGNAL_RETRY = uint8(2)
+	SIGNAL_SEND   = uint8(0)
+	SIGNAL_DONE   = uint8(1)
+	SIGNAL_RETRY  = uint8(2)
+	SIGNAL_RESEND = uint8(3)
 )
 
 //extra data add to udp package
@@ -45,36 +43,39 @@ func (this *extraHeader) attach(data []byte) []byte {
 
 //UDP Package
 type UDPPackage struct {
-	Sig      chan [2]uint8
-	conn_tcp net.Conn
-	conn_udp *net.UDPConn
-	conn_id  uint16
-	pkg_buff map[uint8][]byte
-	pkg_len  uint8
+	conn_id      uint16
+	pkg_in_buff  map[uint8][]byte
+	pkg_out_buff map[uint8][]byte
+	pkg_max_id   uint8
+	recv_lock    sync.Mutex
 }
 
 //NewUDPPackage
-func NewUDPPackage(conn_tcp net.Conn, conn_udp *net.UDPConn, conn_id uint16) *UDPPackage {
-	return &UDPPackage{conn_tcp: conn_tcp, conn_udp: conn_udp, conn_id: conn_id}
+func NewUDPPackage(conn_id uint16, isOut bool) *UDPPackage {
+	udpp := &UDPPackage{conn_id: conn_id}
+	if isOut {
+		udpp.pkg_out_buff = make(map[uint8][]byte)
+	} else {
+		udpp.pkg_in_buff = make(map[uint8][]byte)
+	}
+	return udpp
 }
 
-//send data by udp
-func (this *UDPPackage) Send(buff []byte) (err error) {
+//Split data and return pkgs
+func (this *UDPPackage) Split(buff []byte) (pkgs [][]byte, err error) {
 	//split package
-	var pkg_max_id uint8
-	pkg_map := make(map[uint8][]byte)
 	overflow_flag := true
 
 	for pkg_id := uint8(0); pkg_id < 255; pkg_id++ {
 		if len(buff) > SplitSize {
 			tmp := buff[:SplitSize]
 			buff = buff[SplitSize:]
-			pkg_map[pkg_id] = tmp
+			this.pkg_out_buff[pkg_id] = tmp
 			continue
 		}
-		pkg_map[pkg_id] = buff
+		this.pkg_out_buff[pkg_id] = buff
 		overflow_flag = false
-		pkg_max_id = pkg_id
+		this.pkg_max_id = pkg_id
 		break
 	}
 
@@ -83,105 +84,51 @@ func (this *UDPPackage) Send(buff []byte) (err error) {
 		return
 	}
 
-	//send package
-	for pkg_id, data := range pkg_map {
-		header := NewExtraHeader(this.conn_id, pkg_id, pkg_max_id, SIGNAL_SEND)
-		err = this.sendUDP(data, header)
+	//ready pkgs
+	for pkg_id, data := range this.pkg_out_buff {
+		header := NewExtraHeader(this.conn_id, pkg_id, this.pkg_max_id, SIGNAL_SEND)
+		pkgs = append(pkgs, header.attach(data))
 		if err != nil {
 			return
 		}
 	}
 
-	//keep pkgs, wait signal
-	this.Sig = make(chan [2]uint8)
-	go this.handleSignal(pkg_max_id, pkg_map)
 	return
 }
 
-//attach extra header and send
-func (this *UDPPackage) sendUDP(data []byte, header *extraHeader) (err error) {
-	_, err = this.conn_udp.Write(header.attach(data))
-	return
-}
-
-//wait signal
-func (this *UDPPackage) handleSignal(pkg_max_id uint8, pkg_map map[uint8][]byte) {
-	for {
-		select {
-		case s := <-this.Sig:
-			switch {
-			case s[0] == SIGNAL_RETRY:
-				header := NewExtraHeader(this.conn_id, s[1], pkg_max_id, SIGNAL_SEND)
-				err := this.sendUDP(pkg_map[s[1]], header)
-				if err != nil {
-					log.Println("UDPPackage:handleSignal:SIGNAL_RETRY:", err)
-				}
-				continue
-			case s[0] == SIGNAL_DONE:
-				//do something
-			default:
-				log.Println("UDPPackage:handleSignal:unknow signal.")
-			}
-		case <-time.After(time.Duration(Timeout) * time.Second):
-			log.Println("UDPPackage:handleSignal:timeout:", this.conn_id)
+//Get resend pkgs
+func (this *UDPPackage) Resend() (pkgs [][]byte, err error) {
+	for pkg_id, data := range this.pkg_out_buff {
+		header := NewExtraHeader(this.conn_id, pkg_id, this.pkg_max_id, SIGNAL_RESEND)
+		pkgs = append(pkgs, header.attach(data))
+		if err != nil {
+			return
 		}
-		this.Sig = nil
-		break
 	}
+	return
 }
 
 //receive data
-func (this *UDPPackage) Recv(pkg []byte) {
+func (this *UDPPackage) Recv(pkg []byte) (buff []byte, isAll bool) {
+	this.recv_lock.Lock()
+	defer this.recv_lock.Unlock()
+
 	pkg_id := pkg[2]
 	pkg_max_id := uint8(pkg[3])
-	if this.pkg_buff == nil {
-		this.pkg_buff = make(map[uint8][]byte)
-		this.pkg_len = pkg_max_id + 1
-		//init timer
-		time.AfterFunc(time.Duration(Timeout)*time.Second, this.cleanBuff)
-	}
-
-	if _, exist := this.pkg_buff[pkg_id]; !exist {
-		this.pkg_buff[pkg_id] = pkg[5:]
-		this.pkg_len = this.pkg_len - 1
-		if this.pkg_len == 0 {
-			//send OK
-			header := NewExtraHeader(this.conn_id, 0, 0, SIGNAL_DONE)
-			err := this.sendUDP([]byte{}, header)
-			if err != nil {
-				log.Println("UDPPackage:Recv:SIGNAL_DONE:", err)
-			}
-			//send to tcp
-			buff := []byte{}
+	isAll = false
+	if _, exist := this.pkg_in_buff[pkg_id]; !exist {
+		this.pkg_in_buff[pkg_id] = pkg[5:]
+		if uint8(len(this.pkg_in_buff)-1) == pkg_max_id {
 			for i := uint8(0); i <= pkg_max_id; i++ {
-				if p, exist := this.pkg_buff[i]; exist {
+				if p, exist := this.pkg_in_buff[i]; exist {
 					buff = append(buff, p...)
 				} else {
 					log.Println("UDPPackage:Recv:BUG!!!")
 				}
 			}
-			_, err = this.conn_tcp.Write(buff)
-			if err != nil {
-				log.Println("UDPPackage:Recv:write:", err)
-			}
-			this.cleanBuff()
+			isAll = true
+			return
 		}
 	}
-	if this.pkg_len < CheckPoint {
-		for i := uint8(0); i <= pkg_max_id; i++ {
-			if _, exist := this.pkg_buff[i]; !exist {
-				header := NewExtraHeader(this.conn_id, i, pkg_max_id, SIGNAL_RETRY)
-				err := this.sendUDP([]byte{}, header)
-				if err != nil {
-					log.Println("UDPPackage:Recv:SIGNAL_RETRY:", err)
-				}
-			}
-		}
-	}
-}
-
-//clean buff
-func (this *UDPPackage) cleanBuff() {
-	this.pkg_len = 0
-	this.pkg_buff = nil
+	return
 }
