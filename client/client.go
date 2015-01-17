@@ -7,10 +7,9 @@ import (
 )
 
 var (
-	BUFFER_MAXSIZE = 4096
-	tcp_addr       = "0.0.0.0:1357"
-	udp_addr_str   = "71.19.157.50:2468"
-	udp_addr       *net.UDPAddr
+	tcp_addr     = "0.0.0.0:1357"
+	udp_addr_str = "71.19.157.50:2468"
+	udp_addr     *net.UDPAddr
 )
 
 func main() {
