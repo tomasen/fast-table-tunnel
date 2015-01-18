@@ -71,8 +71,13 @@ func (this *Connect) newUDPPackage(isOut bool, conn_id uint16) *UDPPackage {
 
 //send retry pkg
 func (this *Connect) sendRetry(conn_id uint16, sig chan bool) {
-	defer close(sig)
+	defer func() {
+		if r := recover(); r != nil {
+			log.Println("[debug]sendRetry:", r)
+		}
+	}()
 
+	sigFlag := false
 	for i := 1; i <= RETRY_NUM; i++ {
 		select {
 		case <-time.After(time.Millisecond * time.Duration(RETRY_TIMEOUT*i)):
@@ -82,8 +87,13 @@ func (this *Connect) sendRetry(conn_id uint16, sig chan bool) {
 				break
 			}
 		case <-sig:
+			sigFlag = true
 			break
 		}
+	}
+
+	if !sigFlag {
+		close(sig)
 	}
 }
 
@@ -121,6 +131,10 @@ func (this *Connect) sendTCP() {
 				}
 			}
 			this.tcp_cur++
+		} else if (conn_id-this.tcp_cur) == 1 && r_udpp.isAll {
+			if cur_r_udpp, exist := this.in[this.tcp_cur]; exist {
+				this.sendUDP([][]byte{cur_r_udpp.udpp.Retry()})
+			}
 		}
 	}
 }
@@ -196,6 +210,19 @@ func (this *Connect) ListenAndServe() {
 	}
 }
 
+//close retry sig channel
+func (this *Connect) closeSigChan(r_udpp *recv_udpp) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Println("[debug]closeSigChan:", r)
+		}
+	}()
+	if r_udpp.sig != nil {
+		close(r_udpp.sig)
+		r_udpp.sig = nil
+	}
+}
+
 //Receive udp data
 func (this *Connect) Recv(pkg []byte) {
 	if len(pkg) < 5 {
@@ -233,7 +260,7 @@ func (this *Connect) Recv(pkg []byte) {
 		if udpp.Recv(pkg) {
 			if r_udpp, exist2 := this.in[conn_id]; exist2 {
 				r_udpp.isAll = true
-				r_udpp.sig <- true
+				this.closeSigChan(r_udpp)
 			} else {
 				log.Println("Connect:SIGNAL_SEND:BUG!!!")
 			}
@@ -243,7 +270,7 @@ func (this *Connect) Recv(pkg []byte) {
 		if r_udpp, exist := this.in[conn_id]; exist {
 			if r_udpp.udpp.Recv(pkg) {
 				r_udpp.isAll = true
-				r_udpp.sig <- true
+				this.closeSigChan(r_udpp)
 			}
 		} else {
 			//drop pkg
@@ -256,7 +283,7 @@ func (this *Connect) Recv(pkg []byte) {
 		this.locker.Lock()
 		if r_udpp, exist := this.in[conn_id]; exist {
 			r_udpp.isAll = true
-			r_udpp.sig <- true
+			this.closeSigChan(r_udpp)
 		} else {
 			log.Println("Connect:SIGNAL_CLOSE:BUG!!!")
 		}
