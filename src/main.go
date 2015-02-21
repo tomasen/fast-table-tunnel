@@ -6,8 +6,8 @@ import (
 )
 
 var (
-	optConf   = flag.String("conf", "", "config file or url")
-	optHelp     = flag.Bool("h", false, "this help")
+	optConf = flag.String("conf", "", "config file or url")
+	optHelp = flag.Bool("h", false, "this help")
 )
 
 func usage() {
@@ -16,7 +16,7 @@ func usage() {
 }
 
 func Main() {
-	
+
 	// parse arguments
 	flag.Parse()
 
@@ -24,11 +24,11 @@ func Main() {
 		usage()
 		return
 	}
-
-	// if config file is url
-	// TODO: start config update daemon
-	
-	// if config is a file
-	// TODO: just read and reload
-	
+	c := make(chan []byte, 1)
+	var cfg Config
+	err := cfg.Load(*optConf, c)
+	if err != nil {
+		log.Println("ERR:", err)
+		return
+	}
 }
