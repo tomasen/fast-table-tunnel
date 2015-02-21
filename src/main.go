@@ -16,7 +16,6 @@ func usage() {
 }
 
 func Main() {
-
 	// parse arguments
 	flag.Parse()
 
@@ -30,5 +29,10 @@ func Main() {
 	if err != nil {
 		log.Println("ERR:", err)
 		return
+	}
+	
+	for b := range c {
+		
+		// TODO: restart services
 	}
 }

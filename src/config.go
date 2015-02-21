@@ -4,19 +4,17 @@ import (
 	"bitbucket.org/kardianos/osext"
 	"bytes"
 	"crypto/md5"
+	"encoding/json"
 	"errors"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
-	"encoding/json"
 	"sync"
-	"io"
 	"time"
 )
-
-var ()
 
 type Config struct {
 	last_checksum []byte
@@ -70,13 +68,20 @@ func (rc *Config) Check(b []byte) {
 
 		h2 := md5.New()
 		h2.Write(b)
-
-		if bytes.Equal(checksum, h2.Sum(nil)) {
+		bin_chksum := h2.Sum(nil)
+		if bytes.Equal(checksum, bin_chksum) {
 			return
 		}
-		
-		f.Seek(0,0)
+
+		if len(c.BinaryCheckSum) > 0 && !bytes.Equal(checksum, bin_chksum) {
+			log.Println("E(config.check.BinaryCheckSum): not equal")
+			return
+		}
+
+		f.Seek(0, 0)
 		f.Write(b)
+
+		// TODO: restart current process
 	}
 }
 
