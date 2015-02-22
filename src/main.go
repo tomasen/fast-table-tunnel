@@ -23,16 +23,14 @@ func Main() {
 		usage()
 		return
 	}
-	c := make(chan []byte, 1)
-	var cfg Config
-	err := cfg.Load(*optConf, c)
+
+	var sp Supervisor
+	err := sp.Adopt(*optConf)
 	if err != nil {
-		log.Println("ERR:", err)
+		log.Println("E(main.Supervisor.Source):", err)
 		return
 	}
-	
-	for b := range c {
-		
-		// TODO: restart services
-	}
+
+	c := make(chan bool, 1)
+	for _ = range c {}
 }

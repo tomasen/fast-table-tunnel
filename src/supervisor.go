@@ -16,23 +16,12 @@ import (
 	"time"
 )
 
-type Config struct {
+type Supervisor struct {
 	last_checksum []byte
 	once          sync.Once
 }
 
-func (rc *Config) Check(b []byte) {
-	type Binary struct {
-		BinaryUrl      string
-		BinaryCheckSum []byte
-	}
-	var c Binary
-	err := json.Unmarshal(b, &c)
-	if err != nil {
-		log.Println("E(config.check.Unmarshal): ", err)
-		return
-	}
-
+func (sp *Supervisor) SelfUpdate() {
 	execfile, err := osext.Executable()
 	if err != nil {
 		log.Println("E(config.check.Executable): ", err)
@@ -50,11 +39,11 @@ func (rc *Config) Check(b []byte) {
 	io.Copy(h1, f)
 	checksum := h1.Sum(nil)
 
-	if len(c.BinaryCheckSum) > 0 && bytes.Equal(checksum, c.BinaryCheckSum) {
+	if len(_core.BinaryCheckSum) > 0 && bytes.Equal(checksum, _core.BinaryCheckSum) {
 		return
 	}
 
-	response, err := http.Get(c.BinaryUrl)
+	response, err := http.Get(_core.BinaryUrl)
 	if err != nil {
 		log.Println("E(config.check.Get): ", err)
 		return
@@ -73,7 +62,7 @@ func (rc *Config) Check(b []byte) {
 			return
 		}
 
-		if len(c.BinaryCheckSum) > 0 && !bytes.Equal(checksum, bin_chksum) {
+		if len(_core.BinaryCheckSum) > 0 && !bytes.Equal(checksum, bin_chksum) {
 			log.Println("E(config.check.BinaryCheckSum): not equal")
 			return
 		}
@@ -81,53 +70,75 @@ func (rc *Config) Check(b []byte) {
 		f.Seek(0, 0)
 		f.Write(b)
 
-		// TODO: restart current process
+		// restart current process
+		wd, err := os.Getwd()
+		if nil != err {
+			return
+		}
+
+		_, err = os.StartProcess(execfile, os.Args, &os.ProcAttr{
+			Dir:   wd,
+			Env:   os.Environ(),
+			Files: []*os.File{os.Stdin, os.Stdout, os.Stderr},
+		})
+
+		os.Exit(0)
 	}
 }
 
-func (rc *Config) Load(uri string, c chan []byte) error {
+func (sp *Supervisor) Adopt(uri string) error {
+	var b []byte
+
 	u, err := url.Parse(uri)
 	if err != nil {
-		// assume config is a file
-		b, err := ioutil.ReadFile(uri)
+		// config is a file
+		b, err = ioutil.ReadFile(uri)
 		if err != nil {
 			return err
 		}
-		c <- b
-		return nil
-	}
-
-	// if config file is url
-	// start config update daemon
-	var b []byte
-	switch u.Scheme {
-	case "http", "https":
-		response, err := http.Get(uri)
-		if err != nil {
-			return err
-		} else {
-			defer response.Body.Close()
-			b, err = ioutil.ReadAll(response.Body)
+	} else {
+		// config file is an url
+		// start config update daemon
+		switch u.Scheme {
+		case "http", "https":
+			response, err := http.Get(uri)
 			if err != nil {
 				return err
+			} else {
+				defer response.Body.Close()
+				b, err = ioutil.ReadAll(response.Body)
+				if err != nil {
+					return err
+				}
 			}
+		default:
+			return errors.New("Unsupported url scheme while fetching config")
 		}
-	default:
-		return errors.New("Unsupported url scheme while fetching config")
 	}
 
 	h := md5.New()
 	h.Write(b)
 	checksum := h.Sum(nil)
 
-	if !bytes.Equal(checksum, rc.last_checksum) {
-		rc.last_checksum = checksum
-		rc.Check(b)
-		c <- b
-		go rc.once.Do(func() {
+	if !bytes.Equal(checksum, sp.last_checksum) {
+		sp.last_checksum = checksum
+
+		_core.Stop()
+
+		err = json.Unmarshal(b, &_core)
+		if err != nil {
+			log.Println("E(config.load.Unmarshal2): ", err)
+			return err
+		}
+
+		sp.SelfUpdate()
+
+		_core.Start()
+
+		go sp.once.Do(func() {
 			t := time.Tick(1 * time.Minute)
 			for _ = range t {
-				err := rc.Load(uri, c)
+				err := sp.Adopt(uri)
 				if err != nil {
 					log.Println("E(config.load.tick):", err)
 				}
