@@ -25,6 +25,8 @@ func Main() {
 		return
 	}
 
+	// TODO: fork
+
 	var sp Supervisor
 	err := sp.Load(*optConf)
 	if err != nil {

@@ -1,3 +1,4 @@
+// Check ip address of this node
 package ftunnel
 
 import (
@@ -16,6 +17,7 @@ func ip() (s string) {
 		}
 		log.Println("N(ip.0):", "retrying")
 		time.Sleep(3 * time.Second)
+		// TODO: query with other nodes or ipinfo.io/ip
 	}
 	return
 }

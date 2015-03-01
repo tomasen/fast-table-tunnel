@@ -15,12 +15,14 @@ type Core struct {
 }
 
 func (co *Core) Start() {
-	// TODO: determine which node is this node
-	// query with other nodes or http://ifconfig.me/ip ipinfo.io/ip
+	// determine which node is this node
 	myip := ip()
 	for _, s := range co.Nodes {
 		if myip == s.Ip {
 			s.Identity = _nodeId
+		} else {
+			// TODO: check identity of other node
+
 		}
 	}
 

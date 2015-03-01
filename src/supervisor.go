@@ -1,4 +1,5 @@
 // check config update, self-update
+// start/stop core control center and services
 package ftunnel
 
 import (
