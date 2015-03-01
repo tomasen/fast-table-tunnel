@@ -4,7 +4,7 @@ package ftunnel
 type Node struct {
 	Groups   []int
 	Ip       string
-	IsMyself bool
+	Identity uint64
 }
 
 type Core struct {
@@ -17,14 +17,11 @@ type Core struct {
 func (co *Core) Start() {
 	// TODO: determine which node is this node
 	// query with other nodes or http://ifconfig.me/ip ipinfo.io/ip
-	myip, err := myip()
-	if err != nil {
-		for _, s := range co.Nodes {
-			// TODO: query other nodes for my ip
-		}
-	}
+	myip := ip()
 	for _, s := range co.Nodes {
-		s.IsMyself = (s.Ip == myip)
+		if myip == s.Ip {
+			s.Identity = _nodeId
+		}
 	}
 
 	// start all services
