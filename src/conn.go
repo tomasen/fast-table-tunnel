@@ -9,10 +9,10 @@ import (
 )
 
 var (
-	BUFFER_MAXSIZE = 1400
-	CONN_TIMEOUT   = 10  //seconds tcp and udp connect timeout
-	RETRY_TIMEOUT  = 150 //Millisecond
-	WRITE_TIMEOUT  = 500 //Millisecond
+	BUFFER_MAXSIZE = 1048576
+	CONN_TIMEOUT   = 180 //seconds tcp and udp connect timeout
+	RETRY_TIMEOUT  = 100 //Millisecond
+	WRITE_TIMEOUT  = 200 //Millisecond
 	RETRY_NUM      = 10
 )
 
@@ -116,8 +116,7 @@ func (this *Connect) sendTCP() {
 	for conn_id, r_udpp := range this.in {
 		if conn_id == this.tcp_cur && r_udpp.isAll {
 			if len(r_udpp.udpp.Buff) == 0 {
-				this.closeTCP()
-				return
+				continue
 			} else {
 				if this.tcp_conn != nil {
 					this.tcp_conn.SetWriteDeadline(time.Now().Add(time.Millisecond * time.Duration(WRITE_TIMEOUT)))
@@ -174,7 +173,7 @@ func (this *Connect) Serve() {
 				this.sendUDP([][]byte{this.newUDPPackage(true, 0).ClosePkg()})
 				return
 			}
-			if !strings.Contains(eMsg, "timeout") {
+			if !strings.Contains(eMsg, "timeout") && !strings.Contains(eMsg, "closed network") {
 				log.Println("Connect:Serve:Read:", err)
 			}
 			return

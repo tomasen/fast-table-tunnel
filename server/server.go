@@ -9,8 +9,8 @@ import (
 )
 
 var (
-	BUFFER_MAXSIZE = 1400
-	CLEAN_MAP      = 60
+	BUFFER_MAXSIZE = 1048576
+	CLEAN_MAP      = 15
 	tcp_addr       = "127.0.0.1:55552"
 	udp_addr_str   = "0.0.0.0:2468"
 	udp_addr       *net.UDPAddr
@@ -45,13 +45,13 @@ func (this *ConnMap) Clean() {
 	this.locker.Lock()
 	defer this.locker.Unlock()
 
-	la := len(this.cm)
+	//	la := len(this.cm)
 	for u_addr_str, c := range this.cm {
 		if c.Closed {
 			delete(this.cm, u_addr_str)
 		}
 	}
-	log.Println("[info]Clean:", len(this.cm), "/", la)
+	//log.Println("[info]Clean:", len(this.cm), "/", la)
 }
 
 func main() {

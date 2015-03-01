@@ -72,9 +72,11 @@ func (this *UDPPackage) Split(buff []byte) (pkgs [][]byte, err error) {
 		if len(buff) > SplitSize {
 			tmp := buff[:SplitSize]
 			buff = buff[SplitSize:]
+			Encrypt(tmp)
 			this.pkg_out_buff[pkg_id] = tmp
 			continue
 		}
+		Encrypt(buff)
 		this.pkg_out_buff[pkg_id] = buff
 		overflow_flag = false
 		this.pkg_max_id = pkg_id
@@ -125,8 +127,10 @@ func (this *UDPPackage) Recv(pkg []byte) bool {
 	if _, exist := this.pkg_in_buff[pkg_id]; !exist {
 		this.pkg_in_buff[pkg_id] = pkg[5:]
 		if uint8(len(this.pkg_in_buff)-1) == pkg_max_id {
+			this.Buff = []byte{}
 			for i := uint8(0); i <= pkg_max_id; i++ {
 				if p, exist := this.pkg_in_buff[i]; exist {
+					Decrypt(p)
 					this.Buff = append(this.Buff, p...)
 				} else {
 					log.Println("UDPPackage:Recv:BUG!!!")

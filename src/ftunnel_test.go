@@ -19,7 +19,7 @@ var (
 	s_tcp_addr     = "127.0.0.1:34567"
 	s_udp_addr_str = "127.0.0.1:56789"
 	s_udp_addr     *net.UDPAddr
-	request_nums   = 20
+	request_nums   = 5
 	wg             sync.WaitGroup
 	test_data      = []tunnel_test{
 		{[]byte("request begin"), []byte("response begin")},
@@ -109,12 +109,15 @@ func requestRun() {
 	if err != nil {
 		log.Fatal("requestRun:Dial:", err)
 	}
+
 	for _, td := range test_data {
 		err := conn.SetDeadline(time.Now().Add(1e9))
 		if err != nil {
 			log.Fatal("requestRun:SetDeadline:", err)
 		}
-		_, err = conn.Write(td.request)
+		var nn int
+		nn, err = conn.Write(td.request)
+		log.Println("write", nn)
 		if err != nil {
 			log.Fatal("requestRun:Write:", err)
 		}
@@ -125,7 +128,7 @@ func requestRun() {
 		}
 		response := buff[:n]
 		if bytes.Compare(response, td.response) != 0 {
-			log.Fatal("want:", string(td.response), ", but get:", string(response))
+			log.Fatal("want:", string(td.response), len(td.response), ", but get:", string(response), len(response))
 		}
 	}
 	wg.Done()
@@ -152,7 +155,8 @@ func handleConn(conn net.Conn) {
 			}
 		}
 		if notFound {
-			log.Fatal("Test:notFound:", string(request))
+			//log.Fatal("Test:notFound:", string(request))
+			conn.Write(request)
 		}
 	}
 }
@@ -164,6 +168,13 @@ func Test(t *testing.T) {
 	if err != nil {
 		t.Fatal("Test:ResolveUDPAddr:", err)
 	}
+
+	large := ""
+	for i := 0; i < 500; i++ {
+		large += "abcdefghijklmn"
+	}
+	log.Println(len(large))
+	test_data = append(test_data, tunnel_test{[]byte(large), []byte(large)})
 
 	go serverRun()
 	go clientRun()
