@@ -1,3 +1,4 @@
+// check config update, self-update
 package ftunnel
 
 import (
@@ -14,6 +15,10 @@ import (
 	"os"
 	"sync"
 	"time"
+)
+
+var (
+	_core Core
 )
 
 type Supervisor struct {
@@ -86,7 +91,7 @@ func (sp *Supervisor) SelfUpdate() {
 	}
 }
 
-func (sp *Supervisor) Adopt(uri string) error {
+func (sp *Supervisor) Load(uri string) error {
 	var b []byte
 
 	u, err := url.Parse(uri)
@@ -138,7 +143,7 @@ func (sp *Supervisor) Adopt(uri string) error {
 		go sp.once.Do(func() {
 			t := time.Tick(1 * time.Minute)
 			for _ = range t {
-				err := sp.Adopt(uri)
+				err := sp.Load(uri)
 				if err != nil {
 					log.Println("E(config.load.tick):", err)
 				}

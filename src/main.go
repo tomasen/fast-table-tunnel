@@ -1,3 +1,4 @@
+// entry point
 package ftunnel
 
 import (
@@ -25,7 +26,7 @@ func Main() {
 	}
 
 	var sp Supervisor
-	err := sp.Adopt(*optConf)
+	err := sp.Load(*optConf)
 	if err != nil {
 		log.Println("E(main.Supervisor.Source):", err)
 		return
