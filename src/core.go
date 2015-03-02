@@ -1,12 +1,6 @@
 // services control center
 package ftunnel
 
-type Node struct {
-	Groups   []int
-	Ip       string
-	Identity uint64
-}
-
 type Core struct {
 	Nodes          []Node
 	Services       []Service
@@ -17,12 +11,12 @@ type Core struct {
 func (co *Core) Start() {
 	// determine which node is this node
 	myip := ip()
-	for _, s := range co.Nodes {
-		if myip == s.Ip {
-			s.Identity = _nodeId
+	for _, nd := range co.Nodes {
+		if myip == nd.Ip {
+			nd.Identity = _nodeId
 		} else {
-			// TODO: check identity of other node
-
+			// check identity of other node
+			go nd.CheckIdentity()
 		}
 	}
 
