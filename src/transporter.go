@@ -3,6 +3,7 @@ package ftunnel
 
 import (
 	"encoding/binary"
+	flatbuffers "github.com/google/flatbuffers/go"
 	"log"
 	"net"
 	"sync/atomic"
@@ -13,8 +14,9 @@ var (
 )
 
 const (
-	CMD_QUERY_IDENTITY = 1 << iota
-	CMD_PING           = 1 << iota
+	CMD_QUERY_IDENTITY  = 1 << iota
+	CMD_ANSWER_IDENTITY = 1 << iota
+	CMD_PING            = 1 << iota
 )
 
 type Transporter struct {
@@ -43,19 +45,31 @@ func (tr *Transporter) HandleConnection() {
 		buffer = append(buffer, b...)
 		if bytesRead > 0 {
 			packetLen, packetStart = binary.Uvarint(buffer)
-			if packetStart > 0 && bytesRead >= (int(packetLen)+packetStart) {
-				// TODO: unpack
+			packetSize := int(packetLen) + packetStart
+			if packetStart > 0 && bytesRead >= packetSize {
+				// unpack
 				pack := GetRootAsPacket(buffer[packetStart:packetLen], 0)
 
 				p := pack.Command()
 				if (p & CMD_QUERY_IDENTITY) != 0 {
-					// TODO: reply this node's identity
+					// reply this node's identity
+					builder := flatbuffers.NewBuilder(0)
+					PacketAddCommand(builder, CMD_ANSWER_IDENTITY)
+					var id []byte
+					binary.PutUvarint(id, _nodeId)
+					PacketStartContentVector(builder, len(id))
+					for i := len(id); i >= 0; i-- {
+						builder.PrependByte(id[i])
+					}
+					builder.EndVector(len(id))
+					PacketEnd(builder)
+					tr.Write(builder.Bytes)
 				}
-				bytesRead = 0
-				buffer = buffer[:0]
-			} else {
-				// TODO: keep reading
+
+				bytesRead -= packetSize
+				buffer = buffer[packetSize:]
 			}
+			// keep reading
 		}
 	}
 }

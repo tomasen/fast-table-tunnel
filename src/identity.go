@@ -9,10 +9,10 @@ import (
 )
 
 var (
-	_nodeId uint64 = NodeIdentity()
+	_nodeId uint64 = identity()
 )
 
-func NodeIdentity() (r uint64) {
+func identity() (r uint64) {
 	r = uint64(os.Getpid())
 	interfaces, err := net.Interfaces()
 	if err != nil {
