@@ -21,6 +21,13 @@ type Tunnel struct {
 }
 
 //TODO
+func NewTunnel() (tunnel *Tunnel, err error) {
+	tunnel = &Tunnel{}
+	//TODO use MTU set udp_pkg_size
+	return
+}
+
+//TODO
 func (this *Tunnel) Serve() {
 	this.ch_udp_writer = make(chan []byte, UDP_WRITER_MAXSIZE)
 
@@ -50,16 +57,28 @@ func (this *Tunnel) loopReadTCP(tcp_conn *TCPConn) {
 	}()
 
 	for {
-		//TODO 读取数据，分割，存入buf，送入udp发送channel
-		//TODO 创建定时，阻塞，超时或收到信号释放阻塞
-		for {
-			<-tcp_conn.ch_sig
-			//TODO 要求重发,buf取出，送入udp发送channel
-			//TODO Done，break loop
+		buf := make([]byte, 0, this.tcp_buffer_size)
+		err := tcp_conn.SetReadBuffer(cap(buf))
+		if err != nil {
+			logger.Warningln("loopReadTCP:SetReadBuffer:", err)
+			break
 		}
+		_, err = tcp_conn.Read(buf)
+		if err != nil {
+			logger.Debugln("loopReadTCP:Read:", err)
+			break
+		}
+		//TODO 压缩加密等预先处理tcp收到的数据包
+		//count_retry, count_send := tcp_conn.Do(buf)
+		//TODO 计算此次传输质量，计算tunnel质量，调节tcp_buffer_size
 	}
 
-	//TODO 清理，从map删除TCPConn
+	tcp_conn.Close()
+
+	this.mu.Lock()
+	defer this.mu.Unlock()
+
+	delete(this.tcp_conns, tcp_conn.conn_id)
 }
 
 //TODO
@@ -75,8 +94,7 @@ func (this *Tunnel) loopReadUDP() {
 	for {
 		//TODO 接收udp包，解析头部
 		//TODO 查tcp conn id
-		//TODO 信号包，送入tcp sig channel
-		//TODO 组装完成的数据包，TCPConn.Write
+		//TODO go tcp_conn.Recv
 
 		//TODO 超时未收到数据，发送keepAlive，超过阀值未收到回复，关闭本连接
 	}
