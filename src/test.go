@@ -3,6 +3,6 @@
 
 package ftunnel
 
-// test tcp port
+// TODO: test transporter send query_identity
 
-// test gre port
+// TODO: test transporter send ping
