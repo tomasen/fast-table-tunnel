@@ -49,9 +49,7 @@ func (this *TCPConn) Read(buf []byte) (int, error) {
 
 //SetReadBuffer
 func (this *TCPConn) SetReadBuffer(tcp_buffer_size int) error {
-	if tcp_buffer_size < udp_pkg_size {
-		return errors.New("SetReadBuffer too small")
-	} else if this.tcp_buffer_size != tcp_buffer_size {
+	if this.tcp_buffer_size != tcp_buffer_size {
 		this.tcp_buffer_size = tcp_buffer_size
 		return this.conn.SetReadBuffer(tcp_buffer_size)
 	}

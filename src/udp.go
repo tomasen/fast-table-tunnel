@@ -146,3 +146,21 @@ func (this *UDPPackage) Recv(pkg []byte) bool {
 func (this *UDPPackage) ClosePkg() []byte {
 	return NewExtraHeader(this.conn_id, 0, 0, SIGNAL_CLOSE).attach([]byte{})
 }
+
+type ExtraHeader struct {
+}
+
+//TODO
+func NewExtraHeader() *ExtraHeader {
+	return nil
+}
+
+//TODO
+func NewExtraHeaderByPkg(pkg []byte) *ExtraHeader {
+	return nil
+}
+
+//TODO
+func (this *ExtraHeader) GetTCPConnId() uint16 {
+	return 0
+}
