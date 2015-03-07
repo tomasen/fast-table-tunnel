@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"sync/atomic"
+	"time"
 )
 
 var (
@@ -14,91 +15,118 @@ var (
 )
 
 const (
-	CMD_QUERY_IDENTITY  = 1 << iota
-	CMD_ANSWER_IDENTITY = 1 << iota
-	CMD_PING            = 1 << iota
+	CMD_QUERY_IDENTITY  = iota
+	CMD_ANSWER_IDENTITY = iota
+	CMD_PING            = iota
+	CMD_PONG            = iota
 )
 
 type Transporter struct {
 	net.Conn
+	// TODO: readLock?
+	readBuffer []byte
+	readBytes  int
+	latency    int64
 }
 
 func ConnId() uint64 {
 	return atomic.AddUint64(&_connid, 1)
 }
 
-func (tr *Transporter) HandleConnection() {
-	// TODO: unpack and proper reply
-	var buffer []byte
-	var bytesRead int = 0
-	var packetLen uint64 = 0
-	var packetStart int = 0
+func NewTransporter(conn net.Conn) *Transporter {
+	return &Transporter{conn, nil, 0, 0}
+}
+
+func (tr *Transporter) ReadNextPacket() *Packet {
 	for {
 		var b []byte
 		read, err := tr.Read(b)
 		if err != nil {
 			tr.Close()
-			log.Println("N(core.HandleConnection):", err)
-			return
+			log.Println("N(core.ReadNextPacket):", err)
+			return nil
 		}
-		bytesRead += read
-		buffer = append(buffer, b...)
-		if bytesRead > 0 {
-			packetLen, packetStart = binary.Uvarint(buffer)
+		tr.readBytes += read
+		tr.readBuffer = append(tr.readBuffer, b...)
+		if tr.readBytes > 0 {
+			packetLen, packetStart := binary.Uvarint(tr.readBuffer)
 			packetSize := int(packetLen) + packetStart
-			if packetStart > 0 && bytesRead >= packetSize {
+			if packetStart > 0 && tr.readBytes >= packetSize {
 				// unpack
-				pack := GetRootAsPacket(buffer[packetStart:packetLen], 0)
+				pack := GetRootAsPacket(tr.readBuffer[packetStart:packetLen], 0)
 
-				p := pack.Command()
-				if (p & CMD_QUERY_IDENTITY) != 0 {
-					// reply this node's identity
-					builder := flatbuffers.NewBuilder(0)
-					PacketAddCommand(builder, CMD_ANSWER_IDENTITY)
-					var b0 []byte
-					binary.PutUvarint(b0, _nodeId)
-					PacketStartContentVector(builder, len(b0))
-					for i := len(b0); i >= 0; i-- {
-						builder.PrependByte(b0[i])
-					}
-					builder.EndVector(len(b0))
-					sz := PacketEnd(builder)
-					binary.PutUvarint(b0, uint64(sz))
-					tr.Write(b0)
-					tr.Write(builder.Bytes)
-				}
+				tr.readBytes -= packetSize
+				tr.readBuffer = tr.readBuffer[packetSize:]
 
-				bytesRead -= packetSize
-				buffer = buffer[packetSize:]
+				return pack
 			}
 			// keep reading
 		}
 	}
+	return nil
 }
 
-func (tr *Transporter) QueryIdentity() *Packet {
+func (tr *Transporter) WritePacket(p []byte) {
+	var b []byte
+	binary.PutUvarint(b, uint64(len(p)))
+	tr.Write(b)
+	tr.Write(p)
+}
+
+func (tr *Transporter) ServConnection() {
+	for {
+		pack := tr.ReadNextPacket()
+		if pack == nil {
+			break
+		}
+		builder := flatbuffers.NewBuilder(0)
+		switch pack.Command() {
+		case CMD_PING:
+			PacketAddCommand(builder, CMD_PONG)
+		case CMD_QUERY_IDENTITY:
+			// reply this node's identity
+			var b []byte
+			binary.PutUvarint(b, _nodeId)
+
+			PacketAddCommand(builder, CMD_ANSWER_IDENTITY)
+			PacketAddContentData(builder, b)
+		}
+
+		PacketEnd(builder)
+		tr.WritePacket(builder.Bytes)
+	}
+}
+
+func (tr *Transporter) QueryIdentity() uint64 {
 	// send QUERY_IDENTITY
 	builder := flatbuffers.NewBuilder(0)
 	PacketAddCommand(builder, CMD_QUERY_IDENTITY)
 	PacketEnd(builder)
-	tr.Write(builder.Bytes)
-	// TODO: read reply Packet
-	var b []byte
-	_, err := tr.Read(b)
-	if err != nil {
-		tr.Close()
-		log.Println("N(core.QueryIdentity.Read):", err)
-		return nil
+
+	tr.WritePacket(builder.Bytes)
+
+	p := tr.ReadNextPacket()
+	if p != nil {
+		b := p.ContentData()
+		identity, _ := binary.Uvarint(b)
+		return identity
 	}
-	
-	return nil
+
+	return 0
 }
 
-func (tr *Transporter) Ping() {
+func (tr *Transporter) Ping() error {
 	// send CMD_PING
 	builder := flatbuffers.NewBuilder(0)
 	PacketAddCommand(builder, CMD_PING)
 	PacketEnd(builder)
 	tr.Write(builder.Bytes)
-	// TODO: reply and record the latency
+	s := time.Now()
+	// reply and record the latency
+	p := tr.ReadNextPacket()
+	if p != nil {
+		tr.latency = time.Now().Sub(s).Nanoseconds()
+	}
+	// TODO: return proper error
+	return nil
 }

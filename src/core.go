@@ -58,7 +58,7 @@ func (co *Core) StartListen(port string) {
 			log.Println("N(core.Accept):", err)
 			continue
 		}
-		tr := &Transporter{conn}
-		go tr.HandleConnection()
+		tr := NewTransporter(conn)
+		go tr.ServConnection()
 	}
 }
