@@ -6,6 +6,7 @@ import (
 	flatbuffers "github.com/google/flatbuffers/go"
 	"log"
 	"net"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -15,15 +16,15 @@ var (
 )
 
 const (
-	CMD_QUERY_IDENTITY  = iota
-	CMD_ANSWER_IDENTITY = iota
-	CMD_PING            = iota
-	CMD_PONG            = iota
+	CMD_QUERY_IDENTITY = iota
+	CMD_ANSWER_IDENTITY
+	CMD_PING
+	CMD_PONG
 )
 
 type Transporter struct {
 	net.Conn
-	// TODO: readLock?
+	m          *sync.Mutex
 	readBuffer []byte
 	readBytes  int
 	latency    int64
@@ -34,10 +35,12 @@ func ConnId() uint64 {
 }
 
 func NewTransporter(conn net.Conn) *Transporter {
-	return &Transporter{conn, nil, 0, 0}
+	return &Transporter{conn, &sync.Mutex{}, []byte{}, 0, 0}
 }
 
 func (tr *Transporter) ReadNextPacket() *Packet {
+	tr.m.Lock()
+	defer tr.m.Unlock()
 	for {
 		var b []byte
 		read, err := tr.Read(b)
@@ -67,6 +70,9 @@ func (tr *Transporter) ReadNextPacket() *Packet {
 }
 
 func (tr *Transporter) WritePacket(p []byte) {
+	tr.m.Lock()
+	defer tr.m.Unlock()
+
 	var b []byte
 	binary.PutUvarint(b, uint64(len(p)))
 	tr.Write(b)
