@@ -23,7 +23,7 @@ func (co *Core) Start() {
 			co.StartListen(nd.Port)
 		} else {
 			// check identity of other node
-			go nd.CheckIdentity()
+			go nd.Connect()
 		}
 	}
 
@@ -34,8 +34,9 @@ func (co *Core) Start() {
 }
 
 func (co *Core) Stop() {
-	co.listener.Close()
+	// TODO: close all nodes connections
 
+	co.listener.Close()
 	// close all services
 	for _, s := range co.Services {
 		//if is tcplistener

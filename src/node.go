@@ -4,6 +4,7 @@ package ftunnel
 import (
 	"log"
 	"net"
+	"time"
 )
 
 type Node struct {
@@ -11,19 +12,28 @@ type Node struct {
 	Ip       string
 	Port     string
 	Identity uint64
-	conn     net.Conn
+	score    int64 // lantency
+	tr       *Transporter
 }
 
-func (nd *Node) CheckIdentity() (err error) {
+func (nd *Node) Connect() {
 	for {
-		nd.conn, err = net.Dial("tcp", nd.Ip+":"+nd.Port)
-		if err != nil {
-			log.Println("E(node.CheckIdentity):", err)
-			continue
+		conn, err := net.Dial("tcp", nd.Ip+":"+nd.Port)
+		if err == nil {
+			// send query packet to this node that ask for identity
+			nd.tr = NewTransporter(conn)
+			nd.Identity = nd.tr.QueryIdentity()
+			break
 		}
-		// TODO: send query packet to this node that ask for identity
 
+		log.Println("E(node.CheckIdentity):", err)
+		time.Sleep(3 * time.Second)
+		// TODO: proper handle node removal
+	}
+
+	// keep ping to rate the score of node
+	for {
+		nd.score = nd.tr.Ping()
+		time.Sleep(1 * time.Second)
 	}
 }
-
-// TODO: keep ping to rate the score of node

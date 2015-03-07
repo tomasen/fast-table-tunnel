@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	flatbuffers "github.com/google/flatbuffers/go"
 	"log"
+	"math"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -27,7 +28,6 @@ type Transporter struct {
 	m          *sync.Mutex
 	readBuffer []byte
 	readBytes  int
-	latency    int64
 }
 
 func ConnId() uint64 {
@@ -35,7 +35,7 @@ func ConnId() uint64 {
 }
 
 func NewTransporter(conn net.Conn) *Transporter {
-	return &Transporter{conn, &sync.Mutex{}, []byte{}, 0, 0}
+	return &Transporter{conn, &sync.Mutex{}, []byte{}, 0}
 }
 
 func (tr *Transporter) ReadNextPacket() *Packet {
@@ -121,7 +121,7 @@ func (tr *Transporter) QueryIdentity() uint64 {
 	return 0
 }
 
-func (tr *Transporter) Ping() error {
+func (tr *Transporter) Ping() int64 {
 	// send CMD_PING
 	builder := flatbuffers.NewBuilder(0)
 	PacketAddCommand(builder, CMD_PING)
@@ -131,8 +131,8 @@ func (tr *Transporter) Ping() error {
 	// reply and record the latency
 	p := tr.ReadNextPacket()
 	if p != nil {
-		tr.latency = time.Now().Sub(s).Nanoseconds()
+		return time.Now().Sub(s).Nanoseconds()
 	}
-	// TODO: return proper error
-	return nil
+	// return proper error
+	return math.MaxInt64
 }
