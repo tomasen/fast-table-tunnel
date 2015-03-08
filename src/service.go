@@ -1,5 +1,10 @@
 package ftunnel
 
+import (
+	"log"
+	"net"
+)
+
 type Service struct {
 	Name          string
 	Network       string // "tcp", "udp", "ipv4"
@@ -8,12 +13,41 @@ type Service struct {
 	InboundGroup  int
 	DstIp         string
 	DstPort       string
+	tcp_l         net.Listener
 }
 
 func (s *Service) Start() {
-	// TODO:
+	// TODO: udp gre raw_ipv4
+	var err error
+	s.tcp_l, err = net.Listen("tcp", s.Address)
+	if err != nil {
+		log.Println("E(service.StartListen):", err)
+		return
+	}
+
+	for {
+		conn, err := s.tcp_l.Accept()
+		if err != nil {
+			// handle error
+			log.Println("N(service.Accept):", err)
+			continue
+		}
+
+		go func(c net.Conn) {
+			var b []byte
+			for {
+				_, err := c.Read(b)
+				if err != nil {
+					log.Println("E(service.Serv):", err)
+					break
+				}
+				// TODO: send to other nodes, smartly
+			}
+		}(conn)
+	}
 }
 
 func (s *Service) Stop() {
-	// TODO:
+	// TODO: udp gre raw_ipv4
+	s.tcp_l.Close()
 }
