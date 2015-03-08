@@ -14,6 +14,7 @@ type Service struct {
 	DstIp         string
 	DstPort       string
 	tcp_l         net.Listener
+	co            *Core
 }
 
 func (s *Service) Start() {
@@ -35,13 +36,16 @@ func (s *Service) Start() {
 
 		go func(c net.Conn) {
 			var b []byte
+			connid := ConnId()
+			// TODO: build connection
 			for {
 				_, err := c.Read(b)
 				if err != nil {
 					log.Println("E(service.Serv):", err)
 					break
 				}
-				// TODO: send to other nodes, smartly
+				// TODO: send to other nodes, smartly?
+				s.co.Send(b, s, connid)
 			}
 		}(conn)
 	}

@@ -29,6 +29,7 @@ func (co *Core) Start() {
 
 	// start all services
 	for _, s := range co.Services {
+		s.co = co
 		s.Start()
 	}
 }
@@ -65,4 +66,11 @@ func (co *Core) StartListen(port string) {
 		tr := NewTransporter(conn)
 		go tr.ServConnection()
 	}
+}
+
+func (co *Core) Send(b []byte, s *Service, connid uint64) {
+	// TODO:
+	// if this node is inbound or outbound
+	// if this is outbound send one to dst
+	// 
 }
