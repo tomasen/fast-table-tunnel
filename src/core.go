@@ -34,7 +34,10 @@ func (co *Core) Start() {
 }
 
 func (co *Core) Stop() {
-	// TODO: close all nodes connections
+	// close all nodes connections
+	for _, n := range co.Nodes {
+		n.Close()
+	}
 
 	co.listener.Close()
 	// close all services

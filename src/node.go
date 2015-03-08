@@ -3,6 +3,7 @@ package ftunnel
 
 import (
 	"log"
+	"math"
 	"net"
 	"time"
 )
@@ -28,12 +29,27 @@ func (nd *Node) Connect() {
 
 		log.Println("E(node.CheckIdentity):", err)
 		time.Sleep(3 * time.Second)
-		// TODO: proper handle node removal
+
+		// TODO: handle node removal?
 	}
 
 	// keep ping to rate the score of node
 	for {
 		nd.score = nd.tr.Ping()
+		if math.MaxInt64 == nd.score {
+			// Reconnect
+			go nd.Connect()
+			break
+		}
 		time.Sleep(1 * time.Second)
+		// Handle node removal
+		if nd.tr == nil {
+			return
+		}
 	}
+}
+
+func (nd *Node) Close() {
+	nd.tr.Close()
+	nd.tr = nil
 }
