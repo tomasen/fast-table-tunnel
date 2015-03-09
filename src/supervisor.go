@@ -18,10 +18,6 @@ import (
 	"time"
 )
 
-var (
-	_core Core
-)
-
 type Supervisor struct {
 	last_checksum []byte
 	once          sync.Once

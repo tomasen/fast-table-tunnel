@@ -14,7 +14,7 @@ type Service struct {
 	DstIp         string
 	DstPort       string
 	tcp_l         net.Listener
-	co            *Core
+	Nodes         *[]Node
 }
 
 func (s *Service) Start() {
@@ -36,8 +36,12 @@ func (s *Service) Start() {
 
 		go func(c net.Conn) {
 			var b []byte
-			connid := ConnId()
-			// TODO: build connection
+
+			// TODO: build connection by
+			// direct connection (if myself is in the outbounf group)
+			// and send conn Packet to next Hop
+			// connid := ConnId()
+
 			for {
 				_, err := c.Read(b)
 				if err != nil {
@@ -45,7 +49,8 @@ func (s *Service) Start() {
 					break
 				}
 				// TODO: send to other nodes, smartly?
-				s.co.Send(b, s, connid)
+				// if this node is inbound or outbound
+				// if this is outbound send one to dst
 			}
 		}(conn)
 	}
