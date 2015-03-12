@@ -11,20 +11,23 @@ type Service struct {
 	Address       string // ":9000"
 	OutboundGroup int
 	InboundGroup  int
-	DstIp         string
-	DstPort       string
+	DstAddress    string // IP:Port
 	tcp_l         net.Listener
-	Nodes         *[]Node
 }
 
 func (s *Service) Start() {
-	// TODO: udp gre raw_ipv4
+	if !_core.NodeDoesBelongGroup(s.InboundGroup, _nodeId) {
+		return
+	}
+	// TODO: listen to udp gre raw_ipv4
 	var err error
 	s.tcp_l, err = net.Listen("tcp", s.Address)
 	if err != nil {
 		log.Println("E(service.StartListen):", err)
 		return
 	}
+
+	outbound := _core.NodeDoesBelongGroup(s.OutboundGroup, _nodeId)
 
 	for {
 		conn, err := s.tcp_l.Accept()
@@ -33,15 +36,20 @@ func (s *Service) Start() {
 			log.Println("N(service.Accept):", err)
 			continue
 		}
-
-		go func(c net.Conn) {
+		
+		go func(c net.Conn, d bool, connid uint64) {
 			var b []byte
 
-			// TODO: build connection by
-			// direct connection (if myself is in the outbounf group)
-			// and send conn Packet to next Hop
-			// connid := ConnId()
-
+			// build connection by
+			if (d) {
+				// TODO: direct connection (if myself is in the outbound group)
+				// which might shouldn't be happenning
+			} else {
+				// TODO: send conn Packet to next Hop
+				b := InitConnPacket("tcp", s.DstAddress)
+				_core.SendPacketToAllNodes(b)
+			}
+			
 			for {
 				_, err := c.Read(b)
 				if err != nil {
@@ -52,11 +60,13 @@ func (s *Service) Start() {
 				// if this node is inbound or outbound
 				// if this is outbound send one to dst
 			}
-		}(conn)
+		}(conn, outbound, ConnId())
 	}
 }
 
 func (s *Service) Stop() {
 	// TODO: udp gre raw_ipv4
-	s.tcp_l.Close()
+	if s.tcp_l != nil {
+		s.tcp_l.Close()
+	}
 }

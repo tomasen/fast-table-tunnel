@@ -34,7 +34,6 @@ func (co *Core) Start() {
 	// start all services
 	for _, s := range co.Services {
 		// TODO: Elect Next Hop
-		s.Nodes = &co.Nodes
 
 		s.Start()
 	}
@@ -72,4 +71,23 @@ func (co *Core) StartListen(port string) {
 		tr := NewTransporter(conn)
 		go tr.ServConnection()
 	}
+}
+
+func (co *Core) NodeDoesBelongGroup(group int, nodeid uint64) bool {
+	for _, n := range co.Nodes {
+		if n.Identity == nodeid {
+			for _, g := range n.Groups {
+				if g == group {
+					return true
+				}
+			}
+			return false
+		}
+	}
+	return false
+}
+
+func (co *Core) SendPacketToAllNodes(b []byte) {
+	// TODO:
+	
 }

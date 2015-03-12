@@ -21,6 +21,7 @@ const (
 	CMD_ANSWER_IDENTITY
 	CMD_PING
 	CMD_PONG
+	CMD_CONN
 )
 
 type Transporter struct {
@@ -126,7 +127,7 @@ func (tr *Transporter) Ping() int64 {
 	builder := flatbuffers.NewBuilder(0)
 	PacketAddCommand(builder, CMD_PING)
 	PacketEnd(builder)
-	tr.Write(builder.Bytes)
+	tr.WritePacket(builder.Bytes)
 	s := time.Now()
 	// reply and record the latency
 	p := tr.ReadNextPacket()

@@ -23,3 +23,14 @@ func (rcv *Packet) ContentData() []byte {
 	}
 	return b
 }
+
+
+func InitConnPacket(network string, address string) []byte {
+	// send CMD_CONN
+	builder := flatbuffers.NewBuilder(0)
+	PacketAddCommand(builder, CMD_CONN)
+	PacketAddDstNetwork(builder, builder.CreateString(network))
+	PacketAddDstAddress(builder, builder.CreateString(address))
+	PacketEnd(builder)
+	return builder.Bytes
+}
