@@ -21,6 +21,7 @@ import (
 type Supervisor struct {
 	last_checksum []byte
 	once          sync.Once
+	co            Core
 }
 
 func (sp *Supervisor) SelfUpdate() {
@@ -41,11 +42,11 @@ func (sp *Supervisor) SelfUpdate() {
 	io.Copy(h1, f)
 	checksum := h1.Sum(nil)
 
-	if len(_core.BinaryCheckSum) > 0 && bytes.Equal(checksum, _core.BinaryCheckSum) {
+	if len(sp.co.BinaryCheckSum) > 0 && bytes.Equal(checksum, sp.co.BinaryCheckSum) {
 		return
 	}
 
-	response, err := http.Get(_core.BinaryUrl)
+	response, err := http.Get(sp.co.BinaryUrl)
 	if err != nil {
 		log.Println("E(config.check.Get): ", err)
 		return
@@ -64,7 +65,7 @@ func (sp *Supervisor) SelfUpdate() {
 			return
 		}
 
-		if len(_core.BinaryCheckSum) > 0 && !bytes.Equal(checksum, bin_chksum) {
+		if len(sp.co.BinaryCheckSum) > 0 && !bytes.Equal(checksum, bin_chksum) {
 			log.Println("E(config.check.BinaryCheckSum): not equal")
 			return
 		}
@@ -125,9 +126,9 @@ func (sp *Supervisor) Load(uri string) error {
 	if !bytes.Equal(checksum, sp.last_checksum) {
 		sp.last_checksum = checksum
 
-		_core.Stop()
+		sp.co.Stop()
 
-		err = json.Unmarshal(b, &_core)
+		err = json.Unmarshal(b, &sp.co)
 		if err != nil {
 			log.Println("E(config.load.Unmarshal2): ", err)
 			return err
@@ -135,7 +136,7 @@ func (sp *Supervisor) Load(uri string) error {
 
 		sp.SelfUpdate()
 
-		_core.Start()
+		sp.co.Start()
 
 		go sp.once.Do(func() {
 			t := time.Tick(1 * time.Minute)

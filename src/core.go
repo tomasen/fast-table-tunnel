@@ -7,7 +7,7 @@ import (
 )
 
 var (
-	_core Core
+//	_core Core
 )
 
 type Core struct {
@@ -34,7 +34,7 @@ func (co *Core) Start() {
 	// start all services
 	for _, s := range co.Services {
 		// TODO: Elect Next Hop
-
+		s.co = co
 		s.Start()
 	}
 }
@@ -87,7 +87,11 @@ func (co *Core) NodeDoesBelongGroup(group int, nodeid uint64) bool {
 	return false
 }
 
-func (co *Core) SendPacketToAllNodes(b []byte) {
-	// TODO:
-	
+func (co *Core) PushPacketToAllNodes(b []byte) {
+	// TODO: 
+	for _, n := range co.Nodes {
+		if n.Identity != _nodeId {
+			n.PushPacket(b)
+		}
+	}
 }

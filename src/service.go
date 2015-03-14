@@ -13,10 +13,11 @@ type Service struct {
 	InboundGroup  int
 	DstAddress    string // IP:Port
 	tcp_l         net.Listener
+	co            *Core
 }
 
 func (s *Service) Start() {
-	if !_core.NodeDoesBelongGroup(s.InboundGroup, _nodeId) {
+	if !s.co.NodeDoesBelongGroup(s.InboundGroup, _nodeId) {
 		return
 	}
 	// TODO: listen to udp gre raw_ipv4
@@ -27,7 +28,7 @@ func (s *Service) Start() {
 		return
 	}
 
-	outbound := _core.NodeDoesBelongGroup(s.OutboundGroup, _nodeId)
+	outbound := s.co.NodeDoesBelongGroup(s.OutboundGroup, _nodeId)
 
 	for {
 		conn, err := s.tcp_l.Accept()
@@ -36,20 +37,20 @@ func (s *Service) Start() {
 			log.Println("N(service.Accept):", err)
 			continue
 		}
-		
+
 		go func(c net.Conn, d bool, connid uint64) {
 			var b []byte
 
 			// build connection by
-			if (d) {
+			if d {
 				// TODO: direct connection (if myself is in the outbound group)
 				// which might shouldn't be happenning
 			} else {
 				// TODO: send conn Packet to next Hop
 				b := InitConnPacket("tcp", s.DstAddress)
-				_core.SendPacketToAllNodes(b)
+				s.co.PushPacketToAllNodes(b)
 			}
-			
+
 			for {
 				_, err := c.Read(b)
 				if err != nil {

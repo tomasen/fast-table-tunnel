@@ -17,7 +17,7 @@ var (
 )
 
 const (
-	CMD_QUERY_IDENTITY = iota
+	CMD_QUERY_IDENTITY uint16 = iota
 	CMD_ANSWER_IDENTITY
 	CMD_PING
 	CMD_PONG
@@ -70,13 +70,13 @@ func (tr *Transporter) ReadNextPacket() *Packet {
 	return nil
 }
 
-func (tr *Transporter) WritePacket(p []byte) {
+func (tr *Transporter) WritePacketBytes(p []byte) {
 	tr.m.Lock()
 	defer tr.m.Unlock()
 
-	var b []byte
-	binary.PutUvarint(b, uint64(len(p)))
-	tr.Write(b)
+	b := make([]byte, binary.MaxVarintLen64)
+	n := binary.PutUvarint(b, uint64(len(p)))
+	tr.Write(b[:n])
 	tr.Write(p)
 }
 
@@ -87,30 +87,32 @@ func (tr *Transporter) ServConnection() {
 			break
 		}
 		builder := flatbuffers.NewBuilder(0)
+		PacketStart(builder)
 		switch pack.Command() {
 		case CMD_PING:
 			PacketAddCommand(builder, CMD_PONG)
 		case CMD_QUERY_IDENTITY:
 			// reply this node's identity
-			var b []byte
-			binary.PutUvarint(b, _nodeId)
+			b := make([]byte, binary.MaxVarintLen64)
+			n := binary.PutUvarint(b, _nodeId)
 
 			PacketAddCommand(builder, CMD_ANSWER_IDENTITY)
-			PacketAddContentData(builder, b)
+			PacketAddContentData(builder, b[:n])
 		}
 
 		PacketEnd(builder)
-		tr.WritePacket(builder.Bytes)
+		tr.WritePacketBytes(builder.Bytes)
 	}
 }
 
 func (tr *Transporter) QueryIdentity() uint64 {
 	// send QUERY_IDENTITY
 	builder := flatbuffers.NewBuilder(0)
+	PacketStart(builder)
 	PacketAddCommand(builder, CMD_QUERY_IDENTITY)
 	PacketEnd(builder)
 
-	tr.WritePacket(builder.Bytes)
+	tr.WritePacketBytes(builder.Bytes)
 
 	p := tr.ReadNextPacket()
 	if p != nil {
@@ -125,9 +127,10 @@ func (tr *Transporter) QueryIdentity() uint64 {
 func (tr *Transporter) Ping() int64 {
 	// send CMD_PING
 	builder := flatbuffers.NewBuilder(0)
+	PacketStart(builder)
 	PacketAddCommand(builder, CMD_PING)
 	PacketEnd(builder)
-	tr.WritePacket(builder.Bytes)
+	tr.WritePacketBytes(builder.Bytes)
 	s := time.Now()
 	// reply and record the latency
 	p := tr.ReadNextPacket()

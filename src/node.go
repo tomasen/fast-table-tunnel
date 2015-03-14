@@ -53,3 +53,9 @@ func (nd *Node) Close() {
 	nd.tr.Close()
 	nd.tr = nil
 }
+
+func (nd *Node) PushPacket(b []byte) {
+	if nd.tr == nil {
+		nd.tr.WritePacketBytes(b)
+	}
+}
