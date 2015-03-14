@@ -17,7 +17,7 @@ var (
 )
 
 const (
-	CMD_QUERY_IDENTITY uint16 = iota
+	CMD_QUERY_IDENTITY = iota
 	CMD_ANSWER_IDENTITY
 	CMD_PING
 	CMD_PONG
@@ -42,23 +42,19 @@ func NewTransporter(conn net.Conn) *Transporter {
 func (tr *Transporter) ReadNextPacket() *Packet {
 	tr.m.Lock()
 	defer tr.m.Unlock()
+	b := make([]byte, 4096)
 	for {
-		var b []byte
-		read, err := tr.Read(b)
-		if err != nil {
-			tr.Close()
-			log.Println("N(core.ReadNextPacket):", err)
-			return nil
-		}
-		tr.readBytes += read
-		tr.readBuffer = append(tr.readBuffer, b...)
 		if tr.readBytes > 0 {
 			packetLen, packetStart := binary.Uvarint(tr.readBuffer)
 			packetSize := int(packetLen) + packetStart
 			if packetStart > 0 && tr.readBytes >= packetSize {
 				// unpack
-				pack := GetRootAsPacket(tr.readBuffer[packetStart:packetLen], 0)
-
+				// log.Println("N(core.ReadNextPacket.unpacking):", tr.readBytes, packetStart,
+				// 	packetLen, packetSize, len(tr.readBuffer))
+				pack, err := GetAsPacket(tr.readBuffer[packetStart:packetSize], 0)
+				if err != nil {
+					log.Println("E(core.ReadNextPacket.GetAsPacket):", err)
+				}
 				tr.readBytes -= packetSize
 				tr.readBuffer = tr.readBuffer[packetSize:]
 
@@ -66,6 +62,16 @@ func (tr *Transporter) ReadNextPacket() *Packet {
 			}
 			// keep reading
 		}
+		//tr.SetDeadline(time.Now().Add(time.Second * 30))
+		read, err := tr.Read(b)
+		//log.Println("N(core.ReadNextPacket.read):", read)
+		if err != nil {
+			tr.Close()
+			log.Println("N(core.ReadNextPacket):", err)
+			return nil
+		}
+		tr.readBytes += read
+		tr.readBuffer = append(tr.readBuffer, b[:read]...)
 	}
 	return nil
 }
@@ -100,8 +106,8 @@ func (tr *Transporter) ServConnection() {
 			PacketAddContentData(builder, b[:n])
 		}
 
-		PacketEnd(builder)
-		tr.WritePacketBytes(builder.Bytes)
+		builder.Finish(PacketEnd(builder))
+		tr.WritePacketBytes(builder.Bytes[builder.Head():])
 	}
 }
 
@@ -111,8 +117,8 @@ func (tr *Transporter) QueryIdentity() uint64 {
 	PacketStart(builder)
 	PacketAddCommand(builder, CMD_QUERY_IDENTITY)
 	PacketEnd(builder)
-
-	tr.WritePacketBytes(builder.Bytes)
+	builder.Finish(PacketEnd(builder))
+	tr.WritePacketBytes(builder.Bytes[builder.Head():])
 
 	p := tr.ReadNextPacket()
 	if p != nil {
@@ -129,8 +135,8 @@ func (tr *Transporter) Ping() int64 {
 	builder := flatbuffers.NewBuilder(0)
 	PacketStart(builder)
 	PacketAddCommand(builder, CMD_PING)
-	PacketEnd(builder)
-	tr.WritePacketBytes(builder.Bytes)
+	builder.Finish(PacketEnd(builder))
+	tr.WritePacketBytes(builder.Bytes[builder.Head():])
 	s := time.Now()
 	// reply and record the latency
 	p := tr.ReadNextPacket()

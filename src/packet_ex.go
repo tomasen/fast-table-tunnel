@@ -24,7 +24,6 @@ func (rcv *Packet) ContentData() []byte {
 	return b
 }
 
-
 func InitConnPacket(network string, address string) []byte {
 	// send CMD_CONN
 	builder := flatbuffers.NewBuilder(0)
@@ -32,6 +31,15 @@ func InitConnPacket(network string, address string) []byte {
 	PacketAddCommand(builder, CMD_CONN)
 	PacketAddDstNetwork(builder, builder.CreateString(network))
 	PacketAddDstAddress(builder, builder.CreateString(address))
-	PacketEnd(builder)
-	return builder.Bytes
+	builder.Finish(PacketEnd(builder))
+	return builder.Bytes[builder.Head():]
+}
+
+func GetAsPacket(buf []byte, offset flatbuffers.UOffsetT) (pack *Packet, err error) {
+  defer func() {
+    if r := recover(); r != nil {
+      err, _ = r.(error)
+    }
+  }()
+	return GetRootAsPacket(buf, offset), nil
 }
