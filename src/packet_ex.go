@@ -43,3 +43,11 @@ func GetAsPacket(buf []byte, offset flatbuffers.UOffsetT) (pack *Packet, err err
   }()
 	return GetRootAsPacket(buf, offset), nil
 }
+
+func BuildCommandPacket(cmd uint16) []byte {
+	builder := flatbuffers.NewBuilder(0)
+	PacketStart(builder)
+	PacketAddCommand(builder, cmd)
+	builder.Finish(PacketEnd(builder))
+	return builder.Bytes[builder.Head():]
+}

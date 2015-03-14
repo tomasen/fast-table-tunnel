@@ -4,7 +4,7 @@ package ftunnel
 import (
 	"errors"
 	"fmt"
-	flatbuffers "github.com/google/flatbuffers/go"
+//	flatbuffers "github.com/google/flatbuffers/go"
 	"log"
 	"net"
 	"testing"
@@ -74,28 +74,16 @@ func TestReadNextPacket(t *testing.T) {
 
 	tr := NewTransporter(conn)
 	// Testing CMD_PING
-	builder := flatbuffers.NewBuilder(0)
-	PacketStart(builder)
-	PacketAddCommand(builder, CMD_PING)
-	builder.Finish(PacketEnd(builder))
-	tr.WritePacketBytes(builder.Bytes[builder.Head():])
+	tr.WritePacketBytes(BuildCommandPacket(CMD_PING))
 
-	builder = flatbuffers.NewBuilder(0)
-	PacketStart(builder)
-	PacketAddCommand(builder, CMD_PONG)
-	builder.Finish(PacketEnd(builder))
-	tr.WritePacketBytes(builder.Bytes[builder.Head():])
+	tr.WritePacketBytes(BuildCommandPacket(CMD_PONG))
 
 	time.Sleep(time.Second)
 
 	// Testing unformatted bytes
 	tr.WritePacketBytes([]byte("12"))
 
-	builder = flatbuffers.NewBuilder(0)
-	PacketStart(builder)
-	PacketAddCommand(builder, CMD_QUERY_IDENTITY)
-	builder.Finish(PacketEnd(builder))
-	tr.WritePacketBytes(builder.Bytes[builder.Head():])
+	tr.WritePacketBytes(BuildCommandPacket(CMD_QUERY_IDENTITY))
 
 	tr.Close()
 
@@ -107,4 +95,4 @@ func TestReadNextPacket(t *testing.T) {
 	}
 }
 
-// TODO: test transporter send ping
+// TODO: test transporter ping pong
