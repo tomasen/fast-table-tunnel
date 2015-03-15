@@ -2,10 +2,11 @@
 package ftunnel
 
 import (
+	"bytes"
 	"crypto/md5"
 	"errors"
 	"fmt"
-	flatbuffers "github.com/google/flatbuffers/go"
+	capn "github.com/glycerine/go-capnproto"
 	"log"
 	"math/rand"
 	"net"
@@ -40,6 +41,7 @@ func TestReadNextPacket(t *testing.T) {
 				log.Println("pack.Command()", pack.Command(), CMD_PING)
 				t.Fatal(errors.New("Command mismatch"))
 			}
+			fmt.Println("PASS 0")
 
 			pack = tr.ReadNextPacket()
 			if pack == nil {
@@ -49,11 +51,13 @@ func TestReadNextPacket(t *testing.T) {
 				log.Println("pack.Command()", pack.Command(), CMD_PONG)
 				t.Fatal(errors.New("Command mismatch"))
 			}
+			fmt.Println("PASS 1")
 
 			pack = tr.ReadNextPacket()
 			if pack != nil {
 				t.Fatal(errors.New("ReadNextPacket return non-nil (3)"))
 			}
+			fmt.Println("PASS 2")
 
 			pack = tr.ReadNextPacket()
 			if pack == nil {
@@ -63,15 +67,17 @@ func TestReadNextPacket(t *testing.T) {
 				log.Println("pack.Command()", pack.Command(), CMD_QUERY_IDENTITY)
 				t.Fatal(errors.New("Command mismatch"))
 			}
+			fmt.Println("PASS 3")
 
 			pack = tr.ReadNextPacket()
 			if pack == nil {
 				t.Fatal(errors.New("ReadNextPacket return nil (2)"))
 			}
-			b := pack.ContentData()
+			b := pack.Content()
 			if len(b) < MTU || fmt.Sprintf("%X", md5.Sum(b)) != pack.DstNetwork() {
 				t.Fatal(errors.New("ContentData mismatch"))
 			}
+			fmt.Println("PASS 4")
 
 			exit <- true
 			break
@@ -101,13 +107,15 @@ func TestReadNextPacket(t *testing.T) {
 		tc[i] = byte(rand.Intn(1))
 	}
 
-	builder := flatbuffers.NewBuilder(0)
-	PacketStart(builder)
-	PacketAddCommand(builder, CMD_CONN)
-	PacketAddDstNetwork(builder, builder.CreateString(fmt.Sprintf("%X", md5.Sum(tc))))
-	PacketAddContentData(builder, tc)
-	builder.Finish(PacketEnd(builder))
-	tr.WritePacketBytes(builder.Bytes[builder.Head():])
+	s := capn.NewBuffer(nil)
+	d := NewRootPacket(s)
+	d.SetCommand(CMD_CONN)
+	d.SetDstNetwork(fmt.Sprintf("%X", md5.Sum(tc)))
+	d.SetContent(tc)
+	buf := bytes.Buffer{}
+	s.WriteToPacked(&buf)
+
+	tr.WritePacketBytes(buf.Bytes())
 
 	tr.Close()
 

@@ -2,8 +2,9 @@
 package ftunnel
 
 import (
+	"bytes"
 	"encoding/binary"
-	flatbuffers "github.com/google/flatbuffers/go"
+	capn "github.com/glycerine/go-capnproto"
 	"log"
 	"math"
 	"net"
@@ -55,7 +56,7 @@ func (tr *Transporter) ReadNextPacket() *Packet {
 				// unpack
 				// log.Println("N(core.ReadNextPacket.unpacking):", tr.readBytes, packetStart,
 				// 	packetLen, packetSize, len(tr.readBuffer))
-				pack, err := GetAsPacket(tr.readBuffer[packetStart:packetSize], 0)
+				pack, err := GetAsPacket(tr.readBuffer[packetStart:packetSize])
 				if err != nil {
 					log.Println("E(core.ReadNextPacket.GetAsPacket):", err)
 				}
@@ -96,37 +97,38 @@ func (tr *Transporter) ServConnection() {
 		if pack == nil {
 			break
 		}
-		builder := flatbuffers.NewBuilder(0)
-		PacketStart(builder)
+		s := capn.NewBuffer(nil)
+		d := NewRootPacket(s)
 		switch pack.Command() {
 		case CMD_PING:
-			PacketAddCommand(builder, CMD_PONG)
+			d.SetCommand(CMD_PONG)
 		case CMD_QUERY_IDENTITY:
 			// reply this node's identity
 			b := make([]byte, binary.MaxVarintLen64)
 			n := binary.PutUvarint(b, _nodeId)
 
-			PacketAddCommand(builder, CMD_ANSWER_IDENTITY)
-			PacketAddContentData(builder, b[:n])
+			d.SetCommand(CMD_ANSWER_IDENTITY)
+			d.SetContent(b[:n])
 		}
 
-		builder.Finish(PacketEnd(builder))
-		tr.WritePacketBytes(builder.Bytes[builder.Head():])
+		buf := bytes.Buffer{}
+		s.WriteToPacked(&buf)
+		tr.WritePacketBytes(buf.Bytes())
 	}
 }
 
 func (tr *Transporter) QueryIdentity() uint64 {
 	// send QUERY_IDENTITY
-	builder := flatbuffers.NewBuilder(0)
-	PacketStart(builder)
-	PacketAddCommand(builder, CMD_QUERY_IDENTITY)
-	PacketEnd(builder)
-	builder.Finish(PacketEnd(builder))
-	tr.WritePacketBytes(builder.Bytes[builder.Head():])
+	s := capn.NewBuffer(nil)
+	d := NewRootPacket(s)
+	d.SetCommand(CMD_QUERY_IDENTITY)
+	buf := bytes.Buffer{}
+	s.WriteToPacked(&buf)
+	tr.WritePacketBytes(buf.Bytes())
 
 	p := tr.ReadNextPacket()
 	if p != nil {
-		b := p.ContentData()
+		b := p.Content()
 		identity, _ := binary.Uvarint(b)
 		return identity
 	}
@@ -136,11 +138,12 @@ func (tr *Transporter) QueryIdentity() uint64 {
 
 func (tr *Transporter) Ping() int64 {
 	// send CMD_PING
-	builder := flatbuffers.NewBuilder(0)
-	PacketStart(builder)
-	PacketAddCommand(builder, CMD_PING)
-	builder.Finish(PacketEnd(builder))
-	tr.WritePacketBytes(builder.Bytes[builder.Head():])
+	builder := capn.NewBuffer(nil)
+	d := NewRootPacket(builder)
+	d.SetCommand(CMD_PING)
+	buf := bytes.Buffer{}
+	builder.WriteToPacked(&buf)
+	tr.WritePacketBytes(buf.Bytes())
 	s := time.Now()
 	// reply and record the latency
 	p := tr.ReadNextPacket()
