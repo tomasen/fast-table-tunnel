@@ -23,6 +23,7 @@ const (
 	CMD_PING
 	CMD_PONG
 	CMD_CONN
+	CMD_CLOSE
 )
 
 const (
@@ -94,7 +95,7 @@ func (tr *Transporter) WritePacketBytes(p []byte) {
 func (tr *Transporter) ServConnection() {
 	for {
 		pack := tr.ReadNextPacket()
-		if pack == nil {
+		if pack == nil || pack.Command() == CMD_CLOSE{
 			break
 		}
 		s := capn.NewBuffer(nil)
@@ -119,12 +120,7 @@ func (tr *Transporter) ServConnection() {
 
 func (tr *Transporter) QueryIdentity() uint64 {
 	// send QUERY_IDENTITY
-	s := capn.NewBuffer(nil)
-	d := NewRootPacket(s)
-	d.SetCommand(CMD_QUERY_IDENTITY)
-	buf := bytes.Buffer{}
-	s.WriteToPacked(&buf)
-	tr.WritePacketBytes(buf.Bytes())
+	tr.WritePacketBytes(BuildCommandPacket(CMD_QUERY_IDENTITY))
 
 	p := tr.ReadNextPacket()
 	if p != nil {
@@ -138,12 +134,7 @@ func (tr *Transporter) QueryIdentity() uint64 {
 
 func (tr *Transporter) Ping() int64 {
 	// send CMD_PING
-	builder := capn.NewBuffer(nil)
-	d := NewRootPacket(builder)
-	d.SetCommand(CMD_PING)
-	buf := bytes.Buffer{}
-	builder.WriteToPacked(&buf)
-	tr.WritePacketBytes(buf.Bytes())
+	tr.WritePacketBytes(BuildCommandPacket(CMD_PING))
 	s := time.Now()
 	// reply and record the latency
 	p := tr.ReadNextPacket()

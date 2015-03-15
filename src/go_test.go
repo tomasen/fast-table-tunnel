@@ -79,6 +79,7 @@ func TestReadNextPacket(t *testing.T) {
 			}
 			fmt.Println("PASS 4")
 
+			ln.Close()
 			exit <- true
 			break
 		}
@@ -128,3 +129,56 @@ func TestReadNextPacket(t *testing.T) {
 }
 
 // TODO: test transporter ping pong
+func TestTransporterService(t *testing.T) {
+	ln, err := net.Listen("tcp", "localhost:"+TEST_PORT)
+	if err != nil {
+		t.Fatal(err)
+	}
+	exit := make(chan bool, 1)
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			tr := NewTransporter(conn)
+			tr.ServConnection()
+
+			exit <- true
+			break
+		}
+	}()
+
+	conn, err := net.Dial("tcp", "localhost:"+TEST_PORT)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tr := NewTransporter(conn)
+
+	tr.WritePacketBytes(BuildCommandPacket(CMD_PING))
+	s := time.Now()
+
+	// reply and record the latency
+	p := tr.ReadNextPacket()
+	if p == nil || p.Command() != CMD_PONG {
+		t.Fatal("PING PONG service Failed")
+	}
+	fmt.Println("ping", time.Now().Sub(s).Nanoseconds(), "ns")
+
+	tr.WritePacketBytes(BuildCommandPacket(CMD_QUERY_IDENTITY))
+	p = tr.ReadNextPacket()
+	if p == nil || p.Command() != CMD_ANSWER_IDENTITY || len(p.Content()) <= 0 {
+		t.Fatal("PING PONG service Failed")
+	}
+
+	tr.WritePacketBytes(BuildCommandPacket(CMD_CLOSE))
+
+	select {
+	case <-exit:
+		fmt.Println("TestService done")
+	case <-time.After(3 * time.Second):
+		t.Fatal(errors.New("timed out"))
+	}
+}
