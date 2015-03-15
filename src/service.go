@@ -48,7 +48,7 @@ func (s *Service) Start() {
 			} else {
 				// TODO: send conn Packet to next Hop
 				b := BuildConnPacket("tcp", s.DstAddress)
-				s.co.PushPacketToAllNodes(b)
+				s.co.PushPackedDataToNextNode(b)
 			}
 
 			for {

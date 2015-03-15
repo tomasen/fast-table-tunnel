@@ -105,7 +105,7 @@ func TestReadNextPacket(t *testing.T) {
 
 	tc := make([]byte, 3*MTU)
 	for i := range tc {
-		tc[i] = byte(rand.Intn(1))
+		tc[i] = byte(rand.Intn(0xff))
 	}
 
 	s := capn.NewBuffer(nil)
@@ -174,6 +174,7 @@ func TestTransporterService(t *testing.T) {
 	}
 
 	tr.WritePacketBytes(BuildCommandPacket(CMD_CLOSE))
+	tr.Close()
 
 	select {
 	case <-exit:

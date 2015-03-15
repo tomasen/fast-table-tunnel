@@ -4,6 +4,7 @@ package ftunnel
 import (
 	"log"
 	"net"
+	"math/rand"
 )
 
 var (
@@ -87,8 +88,31 @@ func (co *Core) NodeDoesBelongGroup(group int, nodeid uint64) bool {
 	return false
 }
 
-func (co *Core) PushPacketToAllNodes(b []byte) {
-	// TODO: 
+func (co *Core) PushPackedDataToNextNode(b []byte) {
+	// TODO: sort by score
+	// pick one of top 3 randomly
+	// PushNextPackedData
+	l := len(co.Nodes)
+	n := l - 1
+	if n > 3 {
+		n = 3
+	}
+	last := -1
+	for i := n; i >= 0; i-- {
+		r := rand.Intn(l)
+		if co.Nodes[r].Identity == _nodeId {
+			i++
+			continue
+		}
+		if last >= 0 {
+			if co.Nodes[r].score < co.Nodes[last].score {
+				last = r
+			}
+		} else {
+			last = r
+		}
+	}
+
 	for _, n := range co.Nodes {
 		if n.Identity != _nodeId {
 			n.PushPacket(b)
