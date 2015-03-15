@@ -24,6 +24,10 @@ const (
 	CMD_CONN
 )
 
+const (
+	MTU = 1500
+)
+
 type Transporter struct {
 	net.Conn
 	m          *sync.Mutex
@@ -42,7 +46,7 @@ func NewTransporter(conn net.Conn) *Transporter {
 func (tr *Transporter) ReadNextPacket() *Packet {
 	tr.m.Lock()
 	defer tr.m.Unlock()
-	b := make([]byte, 4096)
+	b := make([]byte, MTU)
 	for {
 		if tr.readBytes > 0 {
 			packetLen, packetStart := binary.Uvarint(tr.readBuffer)

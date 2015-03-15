@@ -24,7 +24,7 @@ func (rcv *Packet) ContentData() []byte {
 	return b
 }
 
-func InitConnPacket(network string, address string) []byte {
+func BuildConnPacket(network string, address string) []byte {
 	// send CMD_CONN
 	builder := flatbuffers.NewBuilder(0)
 	PacketStart(builder)

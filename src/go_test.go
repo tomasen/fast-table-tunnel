@@ -2,10 +2,12 @@
 package ftunnel
 
 import (
+	"crypto/md5"
 	"errors"
 	"fmt"
-//	flatbuffers "github.com/google/flatbuffers/go"
+	flatbuffers "github.com/google/flatbuffers/go"
 	"log"
+	"math/rand"
 	"net"
 	"testing"
 	"time"
@@ -62,6 +64,15 @@ func TestReadNextPacket(t *testing.T) {
 				t.Fatal(errors.New("Command mismatch"))
 			}
 
+			pack = tr.ReadNextPacket()
+			if pack == nil {
+				t.Fatal(errors.New("ReadNextPacket return nil (2)"))
+			}
+			b := pack.ContentData()
+			if len(b) < MTU || fmt.Sprintf("%X", md5.Sum(b)) != pack.DstNetwork() {
+				t.Fatal(errors.New("ContentData mismatch"))
+			}
+
 			exit <- true
 			break
 		}
@@ -84,6 +95,19 @@ func TestReadNextPacket(t *testing.T) {
 	tr.WritePacketBytes([]byte("12"))
 
 	tr.WritePacketBytes(BuildCommandPacket(CMD_QUERY_IDENTITY))
+
+	tc := make([]byte, 3*MTU)
+	for i := range tc {
+		tc[i] = byte(rand.Intn(1))
+	}
+
+	builder := flatbuffers.NewBuilder(0)
+	PacketStart(builder)
+	PacketAddCommand(builder, CMD_CONN)
+	PacketAddDstNetwork(builder, builder.CreateString(fmt.Sprintf("%X", md5.Sum(tc))))
+	PacketAddContentData(builder, tc)
+	builder.Finish(PacketEnd(builder))
+	tr.WritePacketBytes(builder.Bytes[builder.Head():])
 
 	tr.Close()
 
