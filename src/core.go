@@ -3,8 +3,8 @@ package ftunnel
 
 import (
 	"log"
-	"net"
 	"math/rand"
+	"net"
 )
 
 var (
@@ -34,10 +34,10 @@ func (co *Core) Start() {
 
 	// start all services
 	for _, s := range co.Services {
-		// TODO: Elect Next Hop
 		s.co = co
 		s.Start()
 	}
+
 }
 
 func (co *Core) Stop() {
@@ -89,33 +89,18 @@ func (co *Core) NodeDoesBelongGroup(group int, nodeid uint64) bool {
 }
 
 func (co *Core) PushPackedDataToNextNode(b []byte) {
-	// TODO: sort by score
-	// pick one of top 3 randomly
+	// pick one of top 5 randomly
 	// PushNextPackedData
-	l := len(co.Nodes)
-	n := l - 1
+	n := len(co.Nodes) - 1
 	if n > 3 {
 		n = 3
 	}
-	last := -1
-	for i := n; i >= 0; i-- {
-		r := rand.Intn(l)
+	for {
+		r := rand.Intn(n)
 		if co.Nodes[r].Identity == _nodeId {
-			i++
 			continue
 		}
-		if last >= 0 {
-			if co.Nodes[r].score < co.Nodes[last].score {
-				last = r
-			}
-		} else {
-			last = r
-		}
-	}
-
-	for _, n := range co.Nodes {
-		if n.Identity != _nodeId {
-			n.PushPacket(b)
-		}
+		co.Nodes[r].PushPacket(b)
+		break
 	}
 }

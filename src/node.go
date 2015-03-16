@@ -6,6 +6,7 @@ import (
 	"math"
 	"net"
 	"time"
+	"sort"
 )
 
 type Node struct {
@@ -15,6 +16,7 @@ type Node struct {
 	Identity uint64
 	score    int64 // lantency
 	tr       *Transporter
+	co       *Core
 }
 
 func (nd *Node) Connect() {
@@ -41,6 +43,7 @@ func (nd *Node) Connect() {
 			go nd.Connect()
 			break
 		}
+		sort.Sort(nodes(nd.co.Nodes))
 		time.Sleep(1 * time.Second)
 		// Handle node removal
 		if nd.tr == nil {
@@ -59,3 +62,9 @@ func (nd *Node) PushPacket(b []byte) {
 		nd.tr.WritePacketBytes(b)
 	}
 }
+
+type nodes []Node
+
+func (a nodes) Len() int           { return len(a) }
+func (a nodes) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a nodes) Less(i, j int) bool { return a[i].score < a[j].score }

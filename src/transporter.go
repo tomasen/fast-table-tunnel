@@ -23,6 +23,7 @@ const (
 	CMD_PING
 	CMD_PONG
 	CMD_CONN
+	CMD_DATA
 	CMD_CLOSE
 )
 

@@ -46,9 +46,11 @@ func (s *Service) Start() {
 				// TODO: direct connection (if myself is in the outbound group)
 				// which might shouldn't be happenning
 			} else {
-				// TODO: send conn Packet to next Hop
+				// send conn Packet to next Hop
 				b := BuildConnPacket("tcp", s.DstAddress)
 				s.co.PushPackedDataToNextNode(b)
+				
+				// TODO: find out the outbound node id before BuildDataPacket
 			}
 
 			for {
@@ -57,9 +59,7 @@ func (s *Service) Start() {
 					log.Println("E(service.Serv):", err)
 					break
 				}
-				// TODO: send to other nodes, smartly?
-				// if this node is inbound or outbound
-				// if this is outbound send one to dst
+				s.co.PushPackedDataToNextNode(BuildDataPacket(b), nid)
 			}
 		}(conn, outbound, ConnId())
 	}

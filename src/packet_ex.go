@@ -3,16 +3,15 @@
 package ftunnel
 
 import (
-	capn "github.com/glycerine/go-capnproto"
 	"bytes"
+	capn "github.com/glycerine/go-capnproto"
 	"log"
 )
 
 func BuildConnPacket(network string, address string) []byte {
-	// send CMD_CONN
 	s := capn.NewBuffer(nil)
 	d := NewRootPacket(s)
-	d.SetCommand(CMD_CONN)	
+	d.SetCommand(CMD_CONN)
 	d.SetDstAddress(address)
 	d.SetDstNetwork(network)
 	buf := bytes.Buffer{}
@@ -20,12 +19,22 @@ func BuildConnPacket(network string, address string) []byte {
 	return buf.Bytes()
 }
 
+func BuildDataPacket(b []byte, nodeid uint64) []byte {
+	s := capn.NewBuffer(nil)
+	d := NewRootPacket(s)
+	d.SetCommand(CMD_DATA)
+	d.SetDstNode(nodeid)
+	buf := bytes.Buffer{}
+	s.WriteToPacked(&buf)
+	return buf.Bytes()
+}
+
 func GetAsPacket(b []byte) (pack *Packet, err error) {
-  defer func() {
-    if r := recover(); r != nil {
-      err, _ = r.(error)
-    }
-  }()
+	defer func() {
+		if r := recover(); r != nil {
+			err, _ = r.(error)
+		}
+	}()
 
 	buf := bytes.NewBuffer(b)
 
@@ -41,7 +50,7 @@ func GetAsPacket(b []byte) (pack *Packet, err error) {
 func BuildCommandPacket(cmd uint16) []byte {
 	s := capn.NewBuffer(nil)
 	d := NewRootPacket(s)
-	d.SetCommand(cmd)	
+	d.SetCommand(cmd)
 	buf := bytes.Buffer{}
 	s.WriteToPacked(&buf)
 	return buf.Bytes()
