@@ -1,7 +1,8 @@
-fast-table-tunnel 是成对工作的TCP隧道工具。特点是高速、系统开销小的加密方式。
+fast-table-tunnel 是成对工作的TCP隧道工具。特点是高速、系统开销小的加密方式
+
 [![Build Status](https://travis-ci.org/tomasen/fast-table-tunnel.svg?branch=master)](https://travis-ci.org/tomasen/fast-table-tunnel)
 
-fast-table-tunnel 支持 Gracefully shutdown 。
+fast-table-tunnel 支持 Gracefully shutdown
 
 # USAGE #
 
