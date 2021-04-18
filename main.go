@@ -1,71 +1,204 @@
 package main
 
 import (
-	gozd "bitbucket.org/PinIdea/zero-downtime-daemon"
-	ftunnel "bitbucket.org/Tomasen/fast-table-tunnel/src"
 	"flag"
+	"github.com/klauspost/compress/zstd"
 	"log"
 	"net"
-	"os"
-	"syscall"
+	"sync"
 )
 
-var (
-	optAccept   = flag.String("s", "", "listen to ip:port")
-	optConnect  = flag.String("c", "", "connect to ip:port")
-	optServerID = flag.String("id", "fasttunnel", "connect to ip:port")
-	optLogfile  = flag.String("log", "", "log filepath")
-	optHelp     = flag.Bool("h", false, "this help")
+const (
+	BUFFER_MAXSIZE = 64 * 1024
 )
 
-func usage() {
-	log.Println("[command] -conf=[config file]")
-	flag.PrintDefaults()
-}
 
 func main() {
+	addrListen := flag.String("s", "", "listen to ip:port")
+	addrConn := flag.String("c", "", "connect to ip:port")
+	role := flag.String("role", "flip", "as: server, client")
 
 	// parse arguments
 	flag.Parse()
 
-	if *optHelp || len(*optServerID) <= 0 || len(*optAccept) <= 0 || len(*optConnect) <= 0 {
-		usage()
+	if len(*addrListen) <= 0 || len(*addrConn) <= 0 {
+		flag.PrintDefaults()
 		return
 	}
 
-	log.Println(os.TempDir())
-	ctx := gozd.Context{
-		Hash:    *optServerID,
-		Command: "start",
-		Maxfds:  syscall.Rlimit{Cur: 32677, Max: 32677},
-		User:    "nobody",
-		Group:   "nobody",
-		Logfile: "ftunnel.log",
-		Directives: map[string]gozd.Server{
-			"client": gozd.Server{
-				Network: "tcp",
-				Address: *optAccept,
-			},
-		},
+	Serve(*addrListen, *addrConn, *role)
+}
+
+func Serve(addrListen, addrConn string, role string) {
+	var comp Scrambler
+	switch role {
+	case "server":
+		comp = NewCompresser()
+	case "client":
+		comp = &ClientCompressor{NewCompresser()}
+	default:
+		comp = &Flipper{}
 	}
 
-	cl := make(chan net.Listener, 1)
-	go ftunnel.HandleListners(cl, *optConnect)
-	sig, err := gozd.Daemonize(ctx, cl) // returns channel that connects with daemon
+	l, err := net.Listen("tcp", addrListen)
 	if err != nil {
-		log.Println("error: ", err)
-		return
+		log.Fatalln(err)
 	}
 
-	// other initializations or config setting
-	for s := range sig {
-		switch s {
-		case syscall.SIGHUP, syscall.SIGUSR2:
-			// do some custom jobs while reload/hotupdate
-
-		case syscall.SIGTERM:
-			// do some clean up and exit
-			return
+	for {
+		connFromClient, err := l.Accept()
+		if err != nil {
+			log.Println("accept error:", err)
+			break
 		}
+
+		go func() {
+			connToServer, err := net.Dial("tcp", addrConn)
+			if err != nil {
+				// handle error
+				log.Println("connect error:", err)
+			}
+			var wg sync.WaitGroup
+
+			go func() {
+				wg.Add(1)
+				defer wg.Done()
+
+				defer connToServer.Close()
+				defer connFromClient.Close()
+
+				// from server to client
+				buff := make([]byte, BUFFER_MAXSIZE)
+
+				for {
+					n, err := connToServer.Read(buff)
+					if err != nil {
+						log.Println("read from server error:", err)
+						return
+					}
+
+					// encode if this is server
+					dbuf, err := comp.Encode(buff[:n])
+					// decode if this is client
+					if err != nil {
+						log.Println("scramble error from server:", err)
+						return
+					}
+
+					_, err = connFromClient.Write(dbuf)
+					if err != nil {
+						log.Println("write to client error:", err)
+						return
+					}
+				}
+			}()
+
+			go func() {
+				wg.Add(1)
+				defer wg.Done()
+
+				defer connToServer.Close()
+				defer connFromClient.Close()
+
+				// from client to server
+				buff := make([]byte, BUFFER_MAXSIZE)
+
+				for {
+					n, err := connFromClient.Read(buff)
+					if err != nil {
+						log.Println("read from client error", err)
+						return
+					}
+
+					// encode if this is client
+
+					// decode if this is sever
+					dbuf, err := comp.Decode(buff[:n])
+					if err != nil {
+						log.Println("scramble error to client:", err)
+						return
+					}
+
+					_, err = connToServer.Write(dbuf)
+					if err != nil {
+						log.Println("write to client error:", err)
+						return
+					}
+				}
+			}()
+
+			wg.Wait()
+		}()
+	}
+}
+
+type Scrambler interface {
+	Encode([]byte) ([]byte, error)
+	Decode([]byte) ([]byte, error)
+}
+
+type Flipper struct {}
+
+func (f Flipper) Encode(buff []byte) ([]byte, error) {
+	Flip(buff)
+	return buff, nil
+}
+
+func (f Flipper) Decode(buff []byte) ([]byte, error) {
+	Flip(buff)
+	return buff, nil
+}
+
+type Compressor struct {
+	enc *zstd.Encoder
+	dec *zstd.Decoder
+	dstBuf []byte
+}
+
+/*
+ should use
+ // Compress input to output.
+	func Compress(in io.Reader, out io.Writer) error {
+		enc, err := zstd.NewWriter(out)
+		if err != nil {
+			return err
+		}
+		_, err = io.Copy(enc, in)
+		if err != nil {
+			enc.Close()
+			return err
+		}
+		return enc.Close()
+	}
+ */
+func NewCompresser() *Compressor {
+	dec, _ := zstd.NewReader(nil)
+	enc, _ := zstd.NewWriter(nil)
+	return &Compressor{enc, dec, make([]byte, BUFFER_MAXSIZE)}
+}
+
+func (e *Compressor) Encode(buff []byte) ([]byte, error) {
+	return e.enc.EncodeAll(buff, e.dstBuf), nil
+}
+
+func (e *Compressor) Decode(buff []byte) ([]byte, error) {
+	return e.dec.DecodeAll(buff, e.dstBuf)
+}
+
+type ClientCompressor struct {
+	*Compressor
+}
+
+func (e *ClientCompressor) Encode(buff []byte) ([]byte, error) {
+	return e.dec.DecodeAll(buff, e.dstBuf)
+}
+
+func (e *ClientCompressor) Decode(buff []byte) ([]byte, error) {
+	return e.enc.EncodeAll(buff, e.dstBuf), nil
+}
+
+func Flip(buff []byte) {
+	for k, v := range buff {
+		buff[k] = ^v
 	}
 }
