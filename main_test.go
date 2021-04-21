@@ -18,10 +18,10 @@ const (
 func TestSpeed(b *testing.T) {
 
 	// start tunnel client
-	go Serve("127.0.0.1:"+TCPORT, "127.0.0.1:"+TSPORT, "client")
+	go Serve("127.0.0.1:"+TCPORT, "127.0.0.1:"+TSPORT)
 
 	// start tunnel server
-	go Serve("127.0.0.1:"+TSPORT, "127.0.0.1:"+SPORT, "server")
+	go Serve("127.0.0.1:"+TSPORT, "127.0.0.1:"+SPORT)
 
 	// start speed test server
 	l, err := net.Listen("tcp", "127.0.0.1:"+SPORT)
